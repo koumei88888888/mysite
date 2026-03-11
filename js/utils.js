@@ -61,10 +61,24 @@ function buildNav(activePage) {
   const nav = document.getElementById('site-nav');
   if (!nav) return;
 
+  // 現在のパス深さを調べてルートへの相対パスを決定
+  // ルート(index.html) → base=""、サブディレクトリ(manga/index.html) → base="../"
+  const depth = location.pathname.replace(/\/[^/]*$/, '').split('/').filter(Boolean).length;
+  const isSubDir = depth > 0 && !location.pathname.endsWith('/') === false || location.pathname.split('/').filter(Boolean).length > 1;
+
+  // パスの階層を pathname から判定（ファイル名除いた最後のセグメント数で判断）
+  const pathParts = location.pathname.split('/').filter(Boolean);
+  // GitHub Pages: /repo/manga/index.html → parts=['repo','manga','index.html']
+  // ローカル: /manga/index.html → parts=['manga','index.html']
+  // ルートにいるか（最後がindex.htmlでその前がカテゴリIDか）で判定
+  const catIds = SITE_CONFIG.categories.map(c => c.id);
+  const inCategory = pathParts.length >= 2 && catIds.includes(pathParts[pathParts.length - 2]);
+  const base = inCategory ? '../' : './';
+
   const tabs = [
-    { href: '../index.html', id: 'home', label: 'HOME', emoji: '🏠' },
+    { href: `${base}index.html`, id: 'home', label: 'HOME', emoji: '🏠' },
     ...SITE_CONFIG.categories.map(c => ({
-      href: `../${c.id}/index.html`,
+      href: `${base}${c.id}/index.html`,
       id: c.id,
       label: c.label,
       emoji: c.emoji,
