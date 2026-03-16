@@ -168,7 +168,7 @@
 </div>
 <script>
 const REDIRECT_URI = 'https://koumei88888888.github.io/mysite/apps/spotify-playlist/';
-const SCOPES = 'playlist-modify-public playlist-modify-private user-read-private';
+const SCOPES = 'playlist-modify-public playlist-modify-private';
 
 let accessToken = null;
 let selectedArtist = null;
@@ -216,6 +216,7 @@ async function startAuth() {
     scope: SCOPES,
     redirect_uri: REDIRECT_URI,
     state: state,
+    show_dialog: 'true',
     code_challenge_method: 'S256',
     code_challenge: challenge,
   });
@@ -346,12 +347,8 @@ async function fetchAll(artistId) {
   const sec = document.getElementById('tracks-section');
   sec.innerHTML = '<div class="status-bar"><div class="spinner"></div>アルバム一覧を取得中...</div>';
   try {
-    // ユーザーの市場を取得（market=JPの代わりに使う）
-    let market = 'JP';
-    try {
-      const me = await api('https://api.spotify.com/v1/me');
-      if (me.country) market = me.country;
-    } catch(e) {}
+    // market固定（user-read-privateなしでは/meのcountryが取れないためJP固定）
+    const market = 'JP';
 
     let albums = [], url = `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&limit=50&market=${market}`;
     while (url) { const d = await api(url); albums = albums.concat(d.items); url = d.next; }
