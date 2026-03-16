@@ -217,6 +217,13 @@ function showAuthed() {
 /* ---- API ---- */
 async function ytGet(url) {
   const r = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+  if (r.status === 401) {
+    sessionStorage.removeItem('yt_access_token');
+    accessToken = null;
+    document.getElementById('auth-indicator').innerHTML = '<span style="color:#e74c3c;font-family:var(--font-mono);font-size:13px;">セッション切れ — 再認証してください</span>';
+    document.getElementById('search-section').style.display = 'none';
+    throw new Error('セッションが切れています。上の「再認証」ボタンを押してください。');
+  }
   if (!r.ok) { const e = await r.json(); throw new Error(e.error?.message || r.status); }
   return r.json();
 }
@@ -410,7 +417,21 @@ function renderTracks(videos, skipCount, dupCount, shortSkip, liveSkip, instSkip
 async function createPlaylist() {
   const name = document.getElementById('playlist-name').value.trim() || (selectedChannel.name + ' - All Songs');
   const msgEl = document.getElementById('create-msg');
-  msgEl.className = 'msg'; msgEl.textContent = 'プレイリストを作成中...';
+  msgEl.className = 'msg'; msgEl.textContent = 'トークンを確認中...';
+
+  // トークン有効性チェック
+  try {
+    const test = await fetch('https://www.googleapis.com/youtube/v3/channels?part=id&mine=true', {
+      headers: { Authorization: 'Bearer ' + accessToken }
+    });
+    if (test.status === 401) {
+      msgEl.className = 'msg err';
+      msgEl.innerHTML = 'セッションが切れています。<br><button class="btn" style="margin-top:8px;" onclick="reAuth()">再認証する</button>';
+      return;
+    }
+  } catch(e) {}
+
+  msgEl.textContent = 'プレイリストを作成中...';
   try {
     const plRes = await fetch('https://www.googleapis.com/youtube/v3/playlists?part=snippet,status', {
       method: 'POST',
