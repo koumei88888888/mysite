@@ -28,13 +28,13 @@ const APPS = [
     status: "live",
   },
   {
-    id:     "spotify-playlist",
-    name:   "Spotify-playlist",
+    id:     "ym-playlist",
+    name:   "YM-playlist",
     desc:   "アーティスト毎にプレイリストを自動生成する",
     image:  "",
     color:  "#91f040",
     tags:   ["音楽"],
-    href:   "./apps/spotify-playlist/index.html",
+    href:   "./apps/ym-playlist/index.html",
     status: "live",
   },
 

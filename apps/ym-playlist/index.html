@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube Music 全曲プレイリストジェネレーター</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --red: #FF0000; --red-dim: #cc0000;
+    --bg: #0a0a0a; --surface: #141414; --surface2: #1e1e1e;
+    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
+    --text: #f0f0f0; --muted: #888; --dimmer: #555;
+    --font-display: 'Syne', sans-serif; --font-mono: 'DM Mono', monospace;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-display); min-height: 100vh; }
+  .shell { max-width: 760px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
+
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 3rem; }
+  .logo-mark { width: 44px; height: 44px; background: var(--red); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .logo-mark svg { width: 22px; height: 22px; fill: white; }
+  .header-text h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .header-text p { font-size: 13px; color: var(--muted); margin-top: 2px; font-family: var(--font-mono); }
+
+  .label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dimmer); margin-bottom: 8px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-bottom: 5px; letter-spacing: 0.05em; }
+  input[type=text] { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--font-mono); font-size: 13px; padding: 9px 12px; outline: none; transition: border-color 0.15s; }
+  input[type=text]:focus { border-color: var(--red); }
+  input[type=text]::placeholder { color: var(--dimmer); }
+
+  .hint { font-family: var(--font-mono); font-size: 11px; color: var(--muted); line-height: 1.7; margin-bottom: 14px; }
+  .hint a { color: var(--red); text-decoration: none; }
+  .hint a:hover { text-decoration: underline; }
+  .hint code { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; color: var(--text); }
+
+  .btn { display: inline-flex; align-items: center; gap: 7px; background: var(--red); color: #fff; font-family: var(--font-display); font-size: 14px; font-weight: 600; border: none; border-radius: 999px; padding: 10px 22px; cursor: pointer; transition: background 0.15s, transform 0.1s; }
+  .btn:hover { background: var(--red-dim); }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { background: var(--surface2); color: var(--dimmer); cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border2); border-radius: 999px; font-family: var(--font-display); font-size: 14px; font-weight: 600; padding: 10px 22px; cursor: pointer; transition: border-color 0.15s; }
+  .btn-ghost:hover { border-color: var(--red); color: var(--red); }
+
+  .search-row { display: flex; gap: 10px; }
+  .search-row input { flex: 1; font-size: 15px; padding: 11px 14px; }
+
+  .candidates-list { border-radius: 10px; overflow: hidden; border: 1px solid var(--border); margin-top: 14px; }
+  .candidate { display: flex; align-items: center; gap: 14px; padding: 12px 16px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.12s; background: var(--surface); }
+  .candidate:last-child { border-bottom: none; }
+  .candidate:hover { background: var(--surface2); }
+  .candidate.selected { background: rgba(255,0,0,0.07); border-left: 3px solid var(--red); }
+  .c-img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--surface2); }
+  .c-placeholder { width: 46px; height: 46px; border-radius: 50%; background: var(--surface2); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+  .c-name { font-size: 15px; font-weight: 600; }
+  .c-sub { font-size: 12px; color: var(--muted); margin-top: 2px; font-family: var(--font-mono); }
+
+  .status-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--surface2); border-radius: 8px; font-family: var(--font-mono); font-size: 13px; color: var(--muted); margin-bottom: 1rem; }
+  .spinner { width: 14px; height: 14px; border: 2px solid var(--border2); border-top-color: var(--red); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 1.25rem; }
+  .stat { background: var(--surface2); border-radius: 8px; padding: 12px; text-align: center; }
+  .stat-num { font-size: 26px; font-weight: 700; color: var(--red); letter-spacing: -0.03em; }
+  .stat-lbl { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  .track-list { max-height: 420px; overflow-y: auto; margin-bottom: 1.25rem; }
+  .track-list::-webkit-scrollbar { width: 4px; }
+  .track-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+  .track-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .track-item:last-child { border-bottom: none; }
+  .t-num { font-family: var(--font-mono); font-size: 12px; color: var(--dimmer); width: 26px; text-align: right; flex-shrink: 0; }
+  .t-thumb { width: 48px; height: 36px; border-radius: 4px; object-fit: cover; background: var(--surface2); flex-shrink: 0; }
+  .t-thumb-ph { width: 48px; height: 36px; border-radius: 4px; background: var(--surface2); flex-shrink: 0; }
+  .t-info { flex: 1; min-width: 0; }
+  .t-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+  .t-ch { font-family: var(--font-mono); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .t-date { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); flex-shrink: 0; }
+
+  .pl-name-row { display: flex; align-items: center; gap: 10px; margin-bottom: 1rem; }
+  .pl-name-row label { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .pl-name-row input { flex: 1; }
+  .action-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+  .msg { font-family: var(--font-mono); font-size: 13px; margin-top: 10px; line-height: 1.6; }
+  .msg.ok { color: #2ecc71; }
+  .msg.err { color: #e74c3c; }
+  .msg a { color: var(--red); }
+
+  .auth-status { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 13px; }
+  .dot-ok { width: 7px; height: 7px; border-radius: 50%; background: #2ecc71; flex-shrink: 0; }
+
+  details { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 1.5rem; }
+  summary { padding: 12px 16px; cursor: pointer; font-size: 14px; font-weight: 600; background: var(--surface); list-style: none; display: flex; align-items: center; justify-content: space-between; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: '＋'; color: var(--red); font-size: 16px; }
+  details[open] summary::after { content: '－'; }
+  .instructions-body { padding: 1rem 1.25rem; background: var(--surface2); font-family: var(--font-mono); font-size: 12px; color: var(--muted); line-height: 2; }
+  .instructions-body ol { padding-left: 1.2rem; }
+  .instructions-body li { margin-bottom: 6px; }
+  .instructions-body code { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; color: var(--text); }
+  .instructions-body a { color: var(--red); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <div class="logo-mark">
+      <svg viewBox="0 0 24 24"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>
+    </div>
+    <div class="header-text">
+      <h1>YouTube Music 全曲プレイリストジェネレーター</h1>
+      <p>インスト・off vocal・重複を自動除外してプレイリストに保存</p>
+    </div>
+  </header>
+
+  <details>
+    <summary>セットアップ手順（初回のみ）</summary>
+    <div class="instructions-body">
+      <ol>
+        <li><a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> でプロジェクトを作成</li>
+        <li>「APIとサービス」→「ライブラリ」→ <code>YouTube Data API v3</code> を有効化</li>
+        <li>「APIとサービス」→「認証情報」→「認証情報を作成」→「OAuthクライアントID」</li>
+        <li>アプリの種類: <code>ウェブアプリケーション</code>、承認済みリダイレクトURIに <code>https://koumei88888888.github.io/mysite/apps/ym-playlist/</code> を追加</li>
+        <li>クライアントIDをコピーして下の欄に貼り付け</li>
+        <li>「OAuth同意画面」でテストユーザーに自分のGoogleアカウントを追加</li>
+      </ol>
+    </div>
+  </details>
+
+  <!-- STEP 1: AUTH -->
+  <div class="label">Step 1 — Google 認証</div>
+  <div class="card">
+    <div class="field">
+      <label>Google OAuth クライアントID</label>
+      <input type="text" id="client-id" placeholder="xxxxxxxxxx.apps.googleusercontent.com" />
+    </div>
+    <div class="hint">
+      Redirect URI: <code>https://koumei88888888.github.io/mysite/apps/ym-playlist/</code><br>
+      Google Cloud Console の OAuth クライアントIDに上記を登録してください。
+    </div>
+    <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+      <button class="btn" onclick="startAuth()">Google で認証</button>
+      <button class="btn-ghost" onclick="reAuth()" style="font-size:13px;padding:8px 16px;">再認証</button>
+      <span id="auth-indicator"></span>
+    </div>
+  </div>
+
+  <!-- STEP 2: SEARCH -->
+  <div id="search-section" style="display:none;">
+    <div class="label">Step 2 — アーティスト検索</div>
+    <div class="card">
+      <div class="search-row">
+        <input type="text" id="artist-input" placeholder="アーティスト名を入力..." />
+        <button class="btn" onclick="searchArtist()">検索</button>
+      </div>
+      <div id="candidates-area"></div>
+    </div>
+  </div>
+
+  <!-- STEP 3: TRACKS -->
+  <div id="tracks-section"></div>
+
+</div>
+<script>
+const REDIRECT_URI = 'https://koumei88888888.github.io/mysite/apps/ym-playlist/';
+const SCOPES = 'https://www.googleapis.com/auth/youtube';
+
+let accessToken = null;
+let selectedChannel = null;
+let filteredVideos = [];
+
+/* ---- PKCE ---- */
+function rand(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return btoa(String.fromCharCode(...a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+async function sha256b64(s) { const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return btoa(String.fromCharCode(...new Uint8Array(h))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+
+/* ---- AUTH ---- */
+async function startAuth() {
+  const cid = document.getElementById('client-id').value.trim();
+  if (!cid) { alert('クライアントIDを入力してください'); return; }
+  localStorage.setItem('yt_cid', cid);
+  const verifier = rand(64);
+  const challenge = await sha256b64(verifier);
+  const state = rand(16);
+  sessionStorage.setItem('yt_verifier', verifier);
+  sessionStorage.setItem('yt_state', state);
+  const p = new URLSearchParams({
+    client_id: cid, redirect_uri: REDIRECT_URI,
+    response_type: 'code', scope: SCOPES,
+    access_type: 'offline', state,
+    code_challenge_method: 'S256', code_challenge: challenge,
+    prompt: 'consent'
+  });
+  window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + p;
+}
+
+async function exchangeCode(code) {
+  const cid = localStorage.getItem('yt_cid');
+  const verifier = sessionStorage.getItem('yt_verifier');
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code, client_id: cid, redirect_uri: REDIRECT_URI,
+      grant_type: 'authorization_code', code_verifier: verifier
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error_description || err.error || res.status);
+  }
+  return res.json();
+}
+
+function reAuth() {
+  sessionStorage.clear();
+  accessToken = null;
+  document.getElementById('auth-indicator').innerHTML = '';
+  document.getElementById('search-section').style.display = 'none';
+  document.getElementById('tracks-section').innerHTML = '';
+  startAuth();
+}
+
+async function checkAuth() {
+  const cid = localStorage.getItem('yt_cid');
+  if (cid) document.getElementById('client-id').value = cid;
+  const saved = sessionStorage.getItem('yt_access_token');
+  if (saved) { accessToken = saved; showAuthed(); return; }
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const state = params.get('state');
+  if (params.get('error')) {
+    document.getElementById('auth-indicator').innerHTML = `<span style="color:#e74c3c;font-family:var(--font-mono);font-size:13px;">認証エラー: ${params.get('error')}</span>`;
+    window.history.replaceState(null, '', window.location.pathname);
+    return;
+  }
+  if (code) {
+    if (state !== sessionStorage.getItem('yt_state')) {
+      document.getElementById('auth-indicator').innerHTML = '<span style="color:#e74c3c;font-family:var(--font-mono);font-size:13px;">state不一致 — 再認証してください</span>';
+      return;
+    }
+    document.getElementById('auth-indicator').innerHTML = '<span style="font-family:var(--font-mono);font-size:13px;color:var(--muted);">トークン取得中...</span>';
+    try {
+      const data = await exchangeCode(code);
+      accessToken = data.access_token;
+      sessionStorage.setItem('yt_access_token', accessToken);
+      window.history.replaceState(null, '', window.location.pathname);
+      showAuthed();
+    } catch(e) {
+      document.getElementById('auth-indicator').innerHTML = `<span style="color:#e74c3c;font-family:var(--font-mono);font-size:13px;">トークン取得失敗: ${e.message}</span>`;
+    }
+  }
+}
+
+function showAuthed() {
+  document.getElementById('auth-indicator').innerHTML = '<span class="auth-status"><span class="dot-ok"></span> 認証済み</span>';
+  document.getElementById('search-section').style.display = 'block';
+}
+
+/* ---- API ---- */
+async function ytGet(url) {
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
+  if (!r.ok) { const e = await r.json(); throw new Error(e.error?.message || r.status); }
+  return r.json();
+}
+
+/* ---- SEARCH ARTIST (channel search) ---- */
+async function searchArtist() {
+  const q = document.getElementById('artist-input').value.trim();
+  if (!q) return;
+  document.getElementById('candidates-area').innerHTML = '<div class="status-bar" style="margin-top:14px;"><div class="spinner"></div>検索中...</div>';
+  document.getElementById('tracks-section').innerHTML = '';
+  try {
+    const d = await ytGet(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${encodeURIComponent(q)}&maxResults=6`);
+    renderCandidates(d.items);
+  } catch(e) {
+    document.getElementById('candidates-area').innerHTML = `<div class="msg err" style="margin-top:10px;">検索失敗: ${e.message}</div>`;
+  }
+}
+
+function renderCandidates(items) {
+  if (!items?.length) { document.getElementById('candidates-area').innerHTML = '<div class="msg" style="margin-top:10px;">見つかりませんでした</div>'; return; }
+  document.getElementById('candidates-area').innerHTML =
+    '<div class="label" style="margin-top:14px;margin-bottom:8px;">候補 — クリックして選択</div>' +
+    '<div class="candidates-list">' +
+    items.map(it => {
+      const img = it.snippet.thumbnails?.default?.url
+        ? `<img class="c-img" src="${it.snippet.thumbnails.default.url}" />`
+        : '<div class="c-placeholder">♪</div>';
+      return `<div class="candidate" data-id="${it.snippet.channelId}" data-name="${encodeURIComponent(it.snippet.channelTitle)}" onclick="selectChannel(this)">
+        ${img}
+        <div>
+          <div class="c-name">${it.snippet.channelTitle}</div>
+          <div class="c-sub">${it.snippet.description?.slice(0,60) || '—'}</div>
+        </div>
+      </div>`;
+    }).join('') + '</div>';
+}
+
+function selectChannel(el) {
+  document.querySelectorAll('.candidate').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedChannel = { id: el.dataset.id, name: decodeURIComponent(el.dataset.name) };
+  fetchAllVideos(selectedChannel.id);
+}
+
+/* ---- FILTERS ---- */
+function isInst(title) {
+  return /instrumental|off\s?vocal|カラオケ|インスト|\bInst\.?\b|\(inst\b|\[inst\b|offvocal/i.test(title);
+}
+function normalizeTitle(title) {
+  return title.toLowerCase()
+    .replace(/[\s\u3000]+/g, ' ')
+    .replace(/\(.*?\)|\[.*?\]|【.*?】|「.*?」/g, '')
+    .replace(/[-_]\s*(ver\.|version|remix|edit|remaster.*|MV|PV|Music Video|Official)/gi, '')
+    .replace(/(MV|PV|Music Video|Official Video|Official|OFFICIAL)/gi, '')
+    .trim();
+}
+
+/* ---- FETCH ALL VIDEOS ---- */
+async function fetchAllVideos(channelId) {
+  const sec = document.getElementById('tracks-section');
+  sec.innerHTML = '<div class="status-bar"><div class="spinner"></div>動画一覧を取得中...</div>';
+  try {
+    // uploads プレイリストIDを取得
+    const ch = await ytGet(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}`);
+    const uploadsId = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+    if (!uploadsId) throw new Error('アップロードプレイリストが見つかりません');
+
+    let videos = [], pageToken = '';
+    do {
+      const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsId}&maxResults=50${pageToken ? '&pageToken='+pageToken : ''}`;
+      const d = await ytGet(url);
+      videos = videos.concat(d.items);
+      pageToken = d.nextPageToken || '';
+      sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>${videos.length} 件取得中...</div>`;
+    } while (pageToken);
+
+    const instCount = videos.filter(v => isInst(v.snippet.title)).length;
+    const withVocal = videos.filter(v => !isInst(v.snippet.title));
+
+    // 重複除去（タイトル正規化）、公開日が早い方を採用
+    const map = new Map(); let dupCount = 0;
+    withVocal.forEach(v => {
+      const key = normalizeTitle(v.snippet.title);
+      const date = v.snippet.publishedAt || '';
+      if (!map.has(key)) { map.set(key, v); }
+      else { dupCount++; if (date < (map.get(key).snippet.publishedAt || '')) map.set(key, v); }
+    });
+
+    filteredVideos = Array.from(map.values())
+      .sort((a,b) => (a.snippet.publishedAt||'').localeCompare(b.snippet.publishedAt||''));
+
+    renderTracks(filteredVideos, instCount, dupCount);
+  } catch(e) {
+    sec.innerHTML = `<div class="msg err">取得失敗: ${e.message}</div>`;
+  }
+}
+
+/* ---- RENDER ---- */
+function renderTracks(videos, instCount, dupCount) {
+  document.getElementById('tracks-section').innerHTML = `
+    <div class="label">Step 3 — プレイリスト作成</div>
+    <div class="card">
+      <div class="stats">
+        <div class="stat"><div class="stat-num">${videos.length}</div><div class="stat-lbl">収録曲</div></div>
+        <div class="stat"><div class="stat-num">${instCount}</div><div class="stat-lbl">インスト除外</div></div>
+        <div class="stat"><div class="stat-num">${dupCount}</div><div class="stat-lbl">重複除外</div></div>
+      </div>
+      <div class="pl-name-row">
+        <label>プレイリスト名</label>
+        <input type="text" id="playlist-name" value="${selectedChannel.name} - All Songs" />
+      </div>
+      <div class="label" style="margin-bottom:8px;">収録動画（投稿日順）</div>
+      <div class="track-list">
+        ${videos.map((v,i) => {
+          const s = v.snippet;
+          const thumb = s.thumbnails?.default?.url;
+          const date = (s.publishedAt||'').slice(0,10);
+          return `<div class="track-item">
+            <span class="t-num">${i+1}</span>
+            ${thumb ? `<img class="t-thumb" src="${thumb}" />` : '<div class="t-thumb-ph"></div>'}
+            <div class="t-info">
+              <div class="t-name">${s.title}</div>
+              <div class="t-ch">${s.channelTitle}</div>
+            </div>
+            <span class="t-date">${date}</span>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="action-row">
+        <button class="btn" onclick="createPlaylist()">YouTube Music にプレイリスト作成</button>
+        <button class="btn-ghost" onclick="exportCSV()">CSV エクスポート</button>
+      </div>
+      <div id="create-msg" class="msg"></div>
+    </div>`;
+}
+
+/* ---- CREATE PLAYLIST ---- */
+async function createPlaylist() {
+  const name = document.getElementById('playlist-name').value.trim() || (selectedChannel.name + ' - All Songs');
+  const msgEl = document.getElementById('create-msg');
+  msgEl.className = 'msg'; msgEl.textContent = 'プレイリストを作成中...';
+  try {
+    const plRes = await fetch('https://www.googleapis.com/youtube/v3/playlists?part=snippet,status', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ snippet: { title: name, description: `${selectedChannel.name} 全曲（インスト・重複除外）` }, status: { privacyStatus: 'private' } })
+    });
+    const pl = await plRes.json();
+    if (!plRes.ok) throw new Error(pl.error?.message || plRes.status);
+    const plId = pl.id;
+
+    let added = 0;
+    for (const v of filteredVideos) {
+      msgEl.textContent = `追加中... (${++added} / ${filteredVideos.length})`;
+      const videoId = v.snippet.resourceId?.videoId || v.snippet.videoId;
+      await fetch('https://www.googleapis.com/youtube/v3/playlistItems?part=snippet', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ snippet: { playlistId: plId, resourceId: { kind: 'youtube#video', videoId } } })
+      });
+    }
+    msgEl.className = 'msg ok';
+    msgEl.innerHTML = `✓ 「${name}」を作成しました（${filteredVideos.length}曲）　→　<a href="https://music.youtube.com/playlist?list=${plId}" target="_blank">YouTube Music で開く ↗</a>`;
+  } catch(e) {
+    msgEl.className = 'msg err'; msgEl.textContent = '作成失敗: ' + e.message;
+  }
+}
+
+/* ---- CSV ---- */
+function exportCSV() {
+  const rows = [['#','タイトル','チャンネル','投稿日','VideoID']];
+  filteredVideos.forEach((v,i) => {
+    const s = v.snippet;
+    rows.push([i+1, s.title, s.channelTitle, (s.publishedAt||'').slice(0,10), s.resourceId?.videoId||'']);
+  });
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'}));
+  a.download = (selectedChannel?.name || 'songs') + '.csv';
+  a.click();
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.activeElement.id === 'artist-input') searchArtist();
+});
+window.addEventListener('load', checkAuth);
+</script>
+</body>
+</html>
