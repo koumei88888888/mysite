@@ -149,18 +149,17 @@
     </div>
   </div>
 
-  <!-- STEP 2: URL INPUT -->
+  <!-- STEP 2: SEARCH -->
   <div id="search-section" style="display:none;">
-    <div class="label">Step 2 — アーティストURLを入力</div>
+    <div class="label">Step 2 — アーティスト名で検索</div>
     <div class="card">
       <div class="hint" style="margin-bottom:12px;">
-        YouTube Music でアーティストページを開き、URLをコピーして貼り付けてください。<br>
-        例: <code style="color:#FF0000;">https://music.youtube.com/channel/UCxxxxxxxx</code><br>
-        または: <code style="color:#FF0000;">https://www.youtube.com/@アーティスト名</code>
+        アーティスト名を入力して検索してください。<br>
+        YouTube Musicの楽曲データ（Art Track）が入った <strong>Topic Channel</strong> を自動で探します。
       </div>
       <div class="search-row">
-        <input type="text" id="artist-input" placeholder="https://music.youtube.com/channel/UC..." />
-        <button class="btn" onclick="loadArtist()">読み込む</button>
+        <input type="text" id="artist-input" placeholder="アーティスト名を入力..." />
+        <button class="btn" onclick="searchArtist()">検索</button>
       </div>
       <div id="candidates-area"></div>
     </div>
@@ -241,59 +240,56 @@ async function ytGet(url) {
   return r.json();
 }
 
-/* ---- LOAD ARTIST FROM URL ---- */
-function extractChannelId(input) {
-  input = input.trim();
-  // music.youtube.com/channel/UCxxx
-  let m = input.match(/(?:music\.youtube\.com|youtube\.com)\/channel\/(UC[\w-]+)/);
-  if (m) return { type: 'id', value: m[1] };
-  // youtube.com/@handle or music.youtube.com/@handle
-  m = input.match(/(?:music\.youtube\.com|youtube\.com)\/@([\w.-]+)/);
-  if (m) return { type: 'handle', value: '@' + m[1] };
-  // UCで始まるIDを直接入力
-  m = input.match(/^(UC[\w-]{20,})$/);
-  if (m) return { type: 'id', value: m[1] };
-  return null;
-}
-
-async function loadArtist() {
-  const input = document.getElementById('artist-input').value.trim();
-  const parsed = extractChannelId(input);
-  if (!parsed) {
-    document.getElementById('candidates-area').innerHTML = '<div class="msg err" style="margin-top:10px;">URLの形式が正しくありません。<br>例: https://music.youtube.com/channel/UCxxxxxxxx</div>';
-    return;
-  }
-  document.getElementById('candidates-area').innerHTML = '<div class="status-bar" style="margin-top:14px;"><div class="spinner"></div>アーティスト情報を取得中...</div>';
+/* ---- SEARCH ARTIST → Topic Channel ---- */
+async function searchArtist() {
+  const q = document.getElementById('artist-input').value.trim();
+  if (!q) return;
+  document.getElementById('candidates-area').innerHTML = '<div class="status-bar" style="margin-top:14px;"><div class="spinner"></div>検索中...</div>';
   document.getElementById('tracks-section').innerHTML = '';
   try {
-    let url;
-    if (parsed.type === 'id') {
-      url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&id=${parsed.value}`;
-    } else {
-      url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&forHandle=${encodeURIComponent(parsed.value)}`;
-    }
-    const d = await ytGet(url);
-    const ch = d.items?.[0];
-    if (!ch) throw new Error('チャンネルが見つかりません');
-    const img = ch.snippet.thumbnails?.default?.url
-      ? `<img class="c-img" src="${ch.snippet.thumbnails.default.url}" />`
-      : '<div class="c-placeholder">♪</div>';
-    document.getElementById('candidates-area').innerHTML = `
-      <div class="label" style="margin-top:14px;margin-bottom:8px;">取得したアーティスト</div>
-      <div class="candidates-list">
-        <div class="candidate selected">
-          ${img}
-          <div>
-            <div class="c-name">${ch.snippet.title}</div>
-            <div class="c-sub">${ch.snippet.description?.slice(0,60) || '—'}</div>
-          </div>
+    // "アーティスト名 - Topic" で検索
+    const d = await ytGet(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${encodeURIComponent(q + ' - Topic')}&maxResults=8`);
+    // Topic Channelのみ絞り込み（タイトルが "- Topic" で終わるもの）
+    const topics = d.items.filter(it => it.snippet.channelTitle.endsWith('- Topic') || it.snippet.channelTitle.endsWith('- トピック'));
+    // Topic Channelが見つからなければ全件表示
+    const candidates = topics.length > 0 ? topics : d.items;
+    renderCandidates(candidates, topics.length > 0);
+  } catch(e) {
+    document.getElementById('candidates-area').innerHTML = `<div class="msg err" style="margin-top:10px;">検索失敗: ${e.message}</div>`;
+  }
+}
+
+function renderCandidates(items, isTopicFiltered) {
+  if (!items?.length) {
+    document.getElementById('candidates-area').innerHTML = '<div class="msg err" style="margin-top:10px;">見つかりませんでした。アーティスト名を英語で試してみてください。</div>';
+    return;
+  }
+  const note = isTopicFiltered
+    ? '<div class="hint" style="margin-top:12px;margin-bottom:8px;">✓ YouTube Music の楽曲チャンネル（Topic）が見つかりました</div>'
+    : '<div class="hint" style="margin-top:12px;margin-bottom:8px; color:#e74c3c;">Topic Channelが見つかりません。近いチャンネルを選択してください</div>';
+  document.getElementById('candidates-area').innerHTML =
+    note +
+    '<div class="label" style="margin-bottom:8px;">候補 — クリックして選択</div>' +
+    '<div class="candidates-list">' +
+    items.map(it => {
+      const img = it.snippet.thumbnails?.default?.url
+        ? `<img class="c-img" src="${it.snippet.thumbnails.default.url}" />`
+        : '<div class="c-placeholder">♪</div>';
+      return `<div class="candidate" data-id="${it.snippet.channelId}" data-name="${encodeURIComponent(it.snippet.channelTitle)}" onclick="selectChannel(this)">
+        ${img}
+        <div>
+          <div class="c-name">${it.snippet.channelTitle}</div>
+          <div class="c-sub">${(it.snippet.description||'').slice(0,60) || '—'}</div>
         </div>
       </div>`;
-    selectedChannel = { id: ch.id, name: ch.snippet.title };
-    fetchAllVideos(ch.id, ch.contentDetails.relatedPlaylists.uploads);
-  } catch(e) {
-    document.getElementById('candidates-area').innerHTML = `<div class="msg err" style="margin-top:10px;">取得失敗: ${e.message}</div>`;
-  }
+    }).join('') + '</div>';
+}
+
+function selectChannel(el) {
+  document.querySelectorAll('.candidate').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedChannel = { id: el.dataset.id, name: decodeURIComponent(el.dataset.name) };
+  fetchAllVideos(selectedChannel.id, null);
 }
 
 /* ---- FILTERS ---- */
@@ -522,7 +518,7 @@ function exportCSV() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && document.activeElement.id === 'artist-input') loadArtist();
+  if (e.key === 'Enter' && document.activeElement.id === 'artist-input') searchArtist();
 });
 window.addEventListener('load', checkAuth);
 </script>
