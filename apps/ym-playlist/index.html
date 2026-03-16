@@ -173,46 +173,19 @@ let accessToken = null;
 let selectedChannel = null;
 let filteredVideos = [];
 
-/* ---- PKCE ---- */
-function rand(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return btoa(String.fromCharCode(...a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
-async function sha256b64(s) { const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return btoa(String.fromCharCode(...new Uint8Array(h))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
-
-/* ---- AUTH ---- */
-async function startAuth() {
+/* ---- AUTH (Implicit Flow) ---- */
+function startAuth() {
   const cid = document.getElementById('client-id').value.trim();
   if (!cid) { alert('クライアントIDを入力してください'); return; }
   localStorage.setItem('yt_cid', cid);
-  const verifier = rand(64);
-  const challenge = await sha256b64(verifier);
-  const state = rand(16);
-  sessionStorage.setItem('yt_verifier', verifier);
+  const state = Math.random().toString(36).slice(2);
   sessionStorage.setItem('yt_state', state);
   const p = new URLSearchParams({
     client_id: cid, redirect_uri: REDIRECT_URI,
-    response_type: 'code', scope: SCOPES,
-    access_type: 'offline', state,
-    code_challenge_method: 'S256', code_challenge: challenge,
-    prompt: 'consent'
+    response_type: 'token', scope: SCOPES,
+    state, prompt: 'consent'
   });
   window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + p;
-}
-
-async function exchangeCode(code) {
-  const cid = localStorage.getItem('yt_cid');
-  const verifier = sessionStorage.getItem('yt_verifier');
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code, client_id: cid, redirect_uri: REDIRECT_URI,
-      grant_type: 'authorization_code', code_verifier: verifier
-    })
-  });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error_description || err.error || res.status);
-  }
-  return res.json();
 }
 
 function reAuth() {
@@ -224,35 +197,31 @@ function reAuth() {
   startAuth();
 }
 
-async function checkAuth() {
+function checkAuth() {
   const cid = localStorage.getItem('yt_cid');
   if (cid) document.getElementById('client-id').value = cid;
-  const saved = sessionStorage.getItem('yt_access_token');
-  if (saved) { accessToken = saved; showAuthed(); return; }
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get('code');
-  const state = params.get('state');
-  if (params.get('error')) {
-    document.getElementById('auth-indicator').innerHTML = `<span style="color:#e74c3c;font-family:var(--font-mono);font-size:13px;">認証エラー: ${params.get('error')}</span>`;
+
+  // フラグメントからトークンを取得（Implicit Flow）
+  const hash = new URLSearchParams(window.location.hash.substring(1));
+  const token = hash.get('access_token');
+  const state = hash.get('state');
+  const error = hash.get('error') || new URLSearchParams(window.location.search).get('error');
+
+  if (error) {
+    document.getElementById('auth-indicator').innerHTML = `<span style="color:#e74c3c;font-family:var(--font-mono);font-size:13px;">認証エラー: ${error}</span>`;
     window.history.replaceState(null, '', window.location.pathname);
     return;
   }
-  if (code) {
-    if (state !== sessionStorage.getItem('yt_state')) {
-      document.getElementById('auth-indicator').innerHTML = '<span style="color:#e74c3c;font-family:var(--font-mono);font-size:13px;">state不一致 — 再認証してください</span>';
-      return;
-    }
-    document.getElementById('auth-indicator').innerHTML = '<span style="font-family:var(--font-mono);font-size:13px;color:var(--muted);">トークン取得中...</span>';
-    try {
-      const data = await exchangeCode(code);
-      accessToken = data.access_token;
-      sessionStorage.setItem('yt_access_token', accessToken);
-      window.history.replaceState(null, '', window.location.pathname);
-      showAuthed();
-    } catch(e) {
-      document.getElementById('auth-indicator').innerHTML = `<span style="color:#e74c3c;font-family:var(--font-mono);font-size:13px;">トークン取得失敗: ${e.message}</span>`;
-    }
+  if (token) {
+    accessToken = token;
+    sessionStorage.setItem('yt_access_token', token);
+    window.history.replaceState(null, '', window.location.pathname);
+    showAuthed();
+    return;
   }
+  // セッションに保存済みトークンがあれば使う
+  const saved = sessionStorage.getItem('yt_access_token');
+  if (saved) { accessToken = saved; showAuthed(); }
 }
 
 function showAuthed() {
