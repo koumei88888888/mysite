@@ -117,30 +117,13 @@
     </div>
   </header>
 
-  <details>
-    <summary>セットアップ手順（初回のみ）</summary>
-    <div class="instructions-body">
-      <ol>
-        <li><a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a> でプロジェクトを作成</li>
-        <li>「APIとサービス」→「ライブラリ」→ <code>YouTube Data API v3</code> を有効化</li>
-        <li>「APIとサービス」→「認証情報」→「認証情報を作成」→「OAuthクライアントID」</li>
-        <li>アプリの種類: <code>ウェブアプリケーション</code>、承認済みリダイレクトURIに <code>https://koumei88888888.github.io/mysite/apps/ym-playlist/</code> を追加</li>
-        <li>クライアントIDをコピーして下の欄に貼り付け</li>
-        <li>「OAuth同意画面」でテストユーザーに自分のGoogleアカウントを追加</li>
-      </ol>
-    </div>
-  </details>
+
 
   <!-- STEP 1: AUTH -->
   <div class="label">Step 1 — Google 認証</div>
   <div class="card">
-    <div class="field">
-      <label>Google OAuth クライアントID</label>
-      <input type="text" id="client-id" placeholder="xxxxxxxxxx.apps.googleusercontent.com" />
-    </div>
     <div class="hint">
-      Redirect URI: <code>https://koumei88888888.github.io/mysite/apps/ym-playlist/</code><br>
-      Google Cloud Console の OAuth クライアントIDに上記を登録してください。
+      Googleアカウントで認証するとYouTube Musicのプレイリストを自動作成できます。
     </div>
     <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
       <button class="btn" onclick="startAuth()">Google で認証</button>
@@ -171,6 +154,7 @@
 </div>
 <script>
 const REDIRECT_URI = 'https://koumei88888888.github.io/mysite/apps/ym-playlist/';
+const CLIENT_ID = '387151179353-nad0hcdgel2ebljaoajfbp7idjuiluv4.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/youtube';
 
 let accessToken = null;
@@ -179,9 +163,7 @@ let filteredVideos = [];
 
 /* ---- AUTH (Implicit Flow) ---- */
 function startAuth() {
-  const cid = document.getElementById('client-id').value.trim();
-  if (!cid) { alert('クライアントIDを入力してください'); return; }
-  localStorage.setItem('yt_cid', cid);
+  const cid = CLIENT_ID;
   const state = Math.random().toString(36).slice(2);
   sessionStorage.setItem('yt_state', state);
   const p = new URLSearchParams({
@@ -202,8 +184,7 @@ function reAuth() {
 }
 
 function checkAuth() {
-  const cid = localStorage.getItem('yt_cid');
-  if (cid) document.getElementById('client-id').value = cid;
+  // クライアントIDは埋め込み済み
 
   // フラグメントからトークンを取得（Implicit Flow）
   const hash = new URLSearchParams(window.location.hash.substring(1));
