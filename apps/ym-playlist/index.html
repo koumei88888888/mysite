@@ -376,6 +376,18 @@ async function fetchAllVideos(channelId, uploadsId) {
     filteredVideos = Array.from(map.values())
       .sort((a,b) => (a.snippet.publishedAt||'').localeCompare(b.snippet.publishedAt||''));
 
+    // 除外曲リストを保存
+    _skippedVideos = videoDetails.filter(v => {
+      const dur = parseDuration(v.contentDetails?.duration || '');
+      const liveContent = v.snippet?.liveBroadcastContent;
+      return (dur > 0 && dur <= 60) || liveContent === 'live' || v.contentDetails?.duration === 'P0D' || isInst(v.snippet?.title||'');
+    });
+
+    // 重複除外曲リストを保存（同タイトルで採用されなかった方）
+    _dupVideos = [];
+    const adoptedIds = new Set(filteredVideos.map(v => v.id));
+    vocal.forEach(v => { if (!adoptedIds.has(v.id)) _dupVideos.push(v); });
+
     renderTracks(filteredVideos, instSkip + shortSkip + liveSkip, dupCount, shortSkip, liveSkip, instSkip);
   } catch(e) {
     sec.innerHTML = `<div class="msg err">取得失敗: ${e.message}</div>`;
@@ -383,37 +395,33 @@ async function fetchAllVideos(channelId, uploadsId) {
 }
 
 /* ---- RENDER ---- */
+let _skippedVideos = [];
+let _dupVideos = [];
+
 function renderTracks(videos, skipCount, dupCount, shortSkip, liveSkip, instSkip) {
   document.getElementById('tracks-section').innerHTML = `
     <div class="label">Step 3 — プレイリスト作成</div>
     <div class="card">
-      <div class="stats">
-        <div class="stat"><div class="stat-num">${videos.length}</div><div class="stat-lbl">収録曲</div></div>
-        <div class="stat"><div class="stat-num">${skipCount}</div><div class="stat-lbl">除外（Shorts/Live/Inst）</div></div>
-        <div class="stat"><div class="stat-num">${dupCount}</div><div class="stat-lbl">重複除外</div></div>
+      <div class="stats" style="cursor:pointer;">
+        <div class="stat" onclick="showTab('included')" id="tab-included" style="border:2px solid var(--red);">
+          <div class="stat-num">${videos.length}</div><div class="stat-lbl">収録曲</div>
+        </div>
+        <div class="stat" onclick="showTab('skipped')" id="tab-skipped">
+          <div class="stat-num">${skipCount}</div><div class="stat-lbl">除外（Shorts/Live/Inst）</div>
+        </div>
+        <div class="stat" onclick="showTab('dup')" id="tab-dup">
+          <div class="stat-num">${dupCount}</div><div class="stat-lbl">重複除外</div>
+        </div>
       </div>
       <div class="pl-name-row">
         <label>プレイリスト名</label>
         <input type="text" id="playlist-name" value="${selectedChannel.name} - All Songs" />
       </div>
-      <div class="label" style="margin-bottom:8px;">収録動画（投稿日順）</div>
-      <div class="track-list">
-        ${videos.map((v,i) => {
-          const s = v.snippet;
-          const thumb = s.thumbnails?.medium?.url || s.thumbnails?.default?.url;
-          const date = (s.publishedAt||'').slice(0,10);
-          return `<div class="track-item">
-            <span class="t-num">${i+1}</span>
-            ${thumb ? `<img class="t-thumb" src="${thumb}" />` : '<div class="t-thumb-ph"></div>'}
-            <div class="t-info">
-              <div class="t-name">${s.title}</div>
-              <div class="t-ch">${s.channelTitle||''}</div>
-            </div>
-            <span class="t-date">${date}</span>
-          </div>`;
-        }).join('')}
+      <div class="label" style="margin-bottom:8px;" id="tab-label">収録動画（投稿日順）</div>
+      <div class="track-list" id="track-list-area">
+        ${videos.map((v,i) => renderTrackItem(v, i+1)).join('')}
       </div>
-      <div class="action-row">
+      <div class="action-row" id="action-row-section">
         <button class="btn" onclick="createPlaylist()">YouTube Music にプレイリスト作成</button>
         <button class="btn-ghost" onclick="exportCSV()">CSV エクスポート</button>
       </div>
@@ -450,6 +458,52 @@ async function createPlaylist() {
     msgEl.innerHTML = `✓ 「${name}」を作成しました（${filteredVideos.length}曲）　→　<a href="https://music.youtube.com/playlist?list=${plId}" target="_blank">YouTube Music で開く ↗</a>`;
   } catch(e) {
     msgEl.className = 'msg err'; msgEl.textContent = '作成失敗: ' + e.message;
+  }
+}
+
+/* ---- TAB SWITCH ---- */
+function renderTrackItem(v, num) {
+  const s = v.snippet;
+  const thumb = s.thumbnails?.medium?.url || s.thumbnails?.default?.url;
+  const date = (s.publishedAt||'').slice(0,10);
+  return `<div class="track-item">
+    <span class="t-num">${num}</span>
+    ${thumb ? `<img class="t-thumb" src="${thumb}" />` : '<div class="t-thumb-ph"></div>'}
+    <div class="t-info">
+      <div class="t-name">${s.title}</div>
+      <div class="t-ch">${s.channelTitle||''}</div>
+    </div>
+    <span class="t-date">${date}</span>
+  </div>`;
+}
+
+function showTab(tab) {
+  const tabs = { included: 'tab-included', skipped: 'tab-skipped', dup: 'tab-dup' };
+  Object.values(tabs).forEach(id => {
+    document.getElementById(id).style.border = 'none';
+  });
+  document.getElementById(tabs[tab]).style.border = '2px solid var(--red)';
+
+  const label = document.getElementById('tab-label');
+  const area = document.getElementById('track-list-area');
+  const actionRow = document.getElementById('action-row-section');
+
+  if (tab === 'included') {
+    label.textContent = '収録動画（投稿日順）';
+    area.innerHTML = filteredVideos.map((v,i) => renderTrackItem(v, i+1)).join('');
+    if (actionRow) actionRow.style.display = 'flex';
+  } else if (tab === 'skipped') {
+    label.textContent = '除外された動画（Shorts / Live / インスト）';
+    area.innerHTML = _skippedVideos.length
+      ? _skippedVideos.map((v,i) => renderTrackItem(v, i+1)).join('')
+      : '<div class="msg" style="padding:8px 0;">除外された動画はありません</div>';
+    if (actionRow) actionRow.style.display = 'none';
+  } else {
+    label.textContent = '重複除外された動画（後のリリース版）';
+    area.innerHTML = _dupVideos.length
+      ? _dupVideos.map((v,i) => renderTrackItem(v, i+1)).join('')
+      : '<div class="msg" style="padding:8px 0;">重複除外された動画はありません</div>';
+    if (actionRow) actionRow.style.display = 'none';
   }
 }
 
