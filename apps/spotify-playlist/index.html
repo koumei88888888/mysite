@@ -145,6 +145,7 @@
     </div>
     <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
       <button class="btn" onclick="startAuth()">Spotify で認証</button>
+      <button class="btn-ghost" onclick="reAuth()" style="font-size:13px;padding:8px 16px;">再認証（トークンリセット）</button>
       <span id="auth-indicator"></span>
     </div>
   </div>
@@ -172,6 +173,17 @@ const SCOPES = 'playlist-modify-public playlist-modify-private user-read-private
 let accessToken = null;
 let selectedArtist = null;
 let filteredTracks = [];
+
+/* ---- RE-AUTH ---- */
+function reAuth() {
+  sessionStorage.removeItem('sp_access_token');
+  sessionStorage.removeItem('pkce_verifier');
+  sessionStorage.removeItem('pkce_state');
+  document.getElementById('auth-indicator').innerHTML = '';
+  document.getElementById('search-section').style.display = 'none';
+  document.getElementById('tracks-section').innerHTML = '';
+  startAuth();
+}
 
 /* ---- PKCE helpers ---- */
 function generateRandom(len) {
@@ -334,15 +346,26 @@ async function fetchAll(artistId) {
   const sec = document.getElementById('tracks-section');
   sec.innerHTML = '<div class="status-bar"><div class="spinner"></div>アルバム一覧を取得中...</div>';
   try {
-    let albums = [], url = `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&limit=50&market=JP`;
+    // ユーザーの市場を取得（market=JPの代わりに使う）
+    let market = 'JP';
+    try {
+      const me = await api('https://api.spotify.com/v1/me');
+      if (me.country) market = me.country;
+    } catch(e) {}
+
+    let albums = [], url = `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&limit=50&market=${market}`;
     while (url) { const d = await api(url); albums = albums.concat(d.items); url = d.next; }
+
+    // アルバムIDで重複除去（同一アルバムが複数国で重複する場合がある）
+    const seen = new Set();
+    albums = albums.filter(al => { if (seen.has(al.id)) return false; seen.add(al.id); return true; });
 
     let raw = [];
     for (let i = 0; i < albums.length; i += 5) {
       sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>${albums.length} 作品中 ${i} 件処理済み...</div>`;
       const chunk = albums.slice(i, i+5);
       const results = await Promise.all(chunk.map(al =>
-        api(`https://api.spotify.com/v1/albums/${al.id}/tracks?limit=50&market=JP`).then(d => ({ al, tracks: d.items }))
+        api(`https://api.spotify.com/v1/albums/${al.id}/tracks?limit=50&market=${market}`).then(d => ({ al, tracks: d.items }))
       ));
       results.forEach(({ al, tracks }) => tracks.forEach(t => raw.push({
         id: t.id, name: t.name, uri: t.uri,
