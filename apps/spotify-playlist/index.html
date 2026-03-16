@@ -150,13 +150,17 @@
     </div>
   </div>
 
-  <!-- STEP 2: SEARCH -->
+  <!-- STEP 2: ARTIST URL -->
   <div id="search-section" style="display:none;">
-    <div class="label">Step 2 — アーティスト検索</div>
+    <div class="label">Step 2 — アーティストURLを入力</div>
     <div class="card">
+      <div class="hint" style="margin-bottom:12px;">
+        SpotifyアプリまたはWeb版でアーティストページを開き、「共有」→「アーティストリンクをコピー」で取得したURLを貼り付けてください。<br>
+        例: <code style="color:#1DB954;">https://open.spotify.com/artist/xxxxxxxxxx</code>
+      </div>
       <div class="search-row">
-        <input type="text" id="artist-input" placeholder="アーティスト名を入力..." />
-        <button class="btn" onclick="searchArtists()">検索</button>
+        <input type="text" id="artist-input" placeholder="https://open.spotify.com/artist/..." />
+        <button class="btn" onclick="loadArtist()">読み込む</button>
       </div>
       <div id="candidates-area" style="margin-top:14px;"></div>
     </div>
@@ -289,45 +293,48 @@ async function api(url) {
   return r.json();
 }
 
-/* ---- SEARCH ---- */
-async function searchArtists() {
-  const q = document.getElementById('artist-input').value.trim();
-  if (!q) return;
-  document.getElementById('candidates-area').innerHTML = '<div class="status-bar"><div class="spinner"></div>検索中...</div>';
+/* ---- LOAD ARTIST FROM URL ---- */
+function extractArtistId(input) {
+  // https://open.spotify.com/artist/XXXXX or spotify:artist:XXXXX
+  const m1 = input.match(/open\.spotify\.com\/artist\/([A-Za-z0-9]+)/);
+  if (m1) return m1[1];
+  const m2 = input.match(/spotify:artist:([A-Za-z0-9]+)/);
+  if (m2) return m2[1];
+  // IDのみ直接入力にも対応
+  if (/^[A-Za-z0-9]{22}$/.test(input.trim())) return input.trim();
+  return null;
+}
+
+async function loadArtist() {
+  const input = document.getElementById('artist-input').value.trim();
+  const artistId = extractArtistId(input);
+  if (!artistId) {
+    document.getElementById('candidates-area').innerHTML = '<div class="msg err">URLの形式が正しくありません。<br>例: https://open.spotify.com/artist/xxxxxxxxxx</div>';
+    return;
+  }
+  document.getElementById('candidates-area').innerHTML = '<div class="status-bar"><div class="spinner"></div>アーティスト情報を取得中...</div>';
   document.getElementById('tracks-section').innerHTML = '';
   try {
-    const d = await api(`https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=artist&limit=6`);
-    renderCandidates(d.artists.items);
-  } catch(e) {
-    document.getElementById('candidates-area').innerHTML = `<div class="msg err">検索失敗: ${e.message}</div>`;
-  }
-}
-
-function fmt(n) { return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? Math.round(n/1000)+'K' : String(n); }
-
-function renderCandidates(artists) {
-  if (!artists.length) { document.getElementById('candidates-area').innerHTML = '<div class="msg">見つかりませんでした</div>'; return; }
-  document.getElementById('candidates-area').innerHTML =
-    '<div class="label" style="margin-bottom:8px;">候補 — クリックして選択</div>' +
-    '<div class="candidates-list">' +
-    artists.map(a => {
-      const img = a.images?.length ? `<img class="c-img" src="${a.images[a.images.length-1].url}" />` : '<div class="c-placeholder">♪</div>';
-      return `<div class="candidate" data-id="${a.id}" data-name="${encodeURIComponent(a.name)}" onclick="selectArtist(this)">
-        ${img}
-        <div>
-          <div class="c-name">${a.name}</div>
-          <div class="c-genre">${a.genres.slice(0,2).join(' · ') || '—'}</div>
-          <div class="c-follow">${fmt(a.followers.total)} followers</div>
+    const a = await api(`https://api.spotify.com/v1/artists/${artistId}`);
+    const img = a.images?.length ? `<img class="c-img" src="${a.images[a.images.length-1].url}" />` : '<div class="c-placeholder">♪</div>';
+    const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? Math.round(n/1000)+'K' : String(n);
+    document.getElementById('candidates-area').innerHTML = `
+      <div class="label" style="margin-bottom:8px;">取得したアーティスト</div>
+      <div class="candidates-list">
+        <div class="candidate selected">
+          ${img}
+          <div>
+            <div class="c-name">${a.name}</div>
+            <div class="c-genre">${a.genres.slice(0,2).join(' · ') || '—'}</div>
+            <div class="c-follow">${fmt(a.followers.total)} followers</div>
+          </div>
         </div>
       </div>`;
-    }).join('') + '</div>';
-}
-
-function selectArtist(el) {
-  document.querySelectorAll('.candidate').forEach(c => c.classList.remove('selected'));
-  el.classList.add('selected');
-  selectedArtist = { id: el.dataset.id, name: decodeURIComponent(el.dataset.name) };
-  fetchAll(selectedArtist.id);
+    selectedArtist = { id: a.id, name: a.name };
+    fetchAll(a.id);
+  } catch(e) {
+    document.getElementById('candidates-area').innerHTML = `<div class="msg err">取得失敗: ${e.message}<br>URLを確認してください。</div>`;
+  }
 }
 
 /* ---- FILTERS ---- */
@@ -465,7 +472,7 @@ function exportCSV() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && document.activeElement.id === 'artist-input') searchArtists();
+  if (e.key === 'Enter' && document.activeElement.id === 'artist-input') loadArtist();
 });
 
 window.addEventListener('load', checkAuth);
