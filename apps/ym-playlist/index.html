@@ -176,6 +176,8 @@ function startAuth() {
 
 function reAuth() {
   sessionStorage.clear();
+  localStorage.removeItem('yt_access_token');
+  localStorage.removeItem('yt_token_expires');
   accessToken = null;
   document.getElementById('auth-indicator').innerHTML = '';
   document.getElementById('search-section').style.display = 'none';
@@ -183,13 +185,25 @@ function reAuth() {
   startAuth();
 }
 
-function checkAuth() {
-  // クライアントIDは埋め込み済み
+function saveToken(token) {
+  const expires = Date.now() + 55 * 60 * 1000; // 55分（余裕を持って）
+  localStorage.setItem('yt_access_token', token);
+  localStorage.setItem('yt_token_expires', expires.toString());
+}
 
+function loadToken() {
+  const token = localStorage.getItem('yt_access_token');
+  const expires = parseInt(localStorage.getItem('yt_token_expires') || '0');
+  if (token && Date.now() < expires) return token;
+  localStorage.removeItem('yt_access_token');
+  localStorage.removeItem('yt_token_expires');
+  return null;
+}
+
+function checkAuth() {
   // フラグメントからトークンを取得（Implicit Flow）
   const hash = new URLSearchParams(window.location.hash.substring(1));
   const token = hash.get('access_token');
-  const state = hash.get('state');
   const error = hash.get('error') || new URLSearchParams(window.location.search).get('error');
 
   if (error) {
@@ -199,18 +213,20 @@ function checkAuth() {
   }
   if (token) {
     accessToken = token;
-    sessionStorage.setItem('yt_access_token', token);
+    saveToken(token);
     window.history.replaceState(null, '', window.location.pathname);
     showAuthed();
     return;
   }
-  // セッションに保存済みトークンがあれば使う
-  const saved = sessionStorage.getItem('yt_access_token');
-  if (saved) { accessToken = saved; showAuthed(); }
+  // localStorageから有効なトークンを復元
+  const saved = loadToken();
+  if (saved) { accessToken = saved; showAuthed(); return; }
 }
 
 function showAuthed() {
-  document.getElementById('auth-indicator').innerHTML = '<span class="auth-status"><span class="dot-ok"></span> 認証済み</span>';
+  const expires = parseInt(localStorage.getItem('yt_token_expires') || '0');
+  const remaining = expires ? Math.round((expires - Date.now()) / 60000) : '?';
+  document.getElementById('auth-indicator').innerHTML = `<span class="auth-status"><span class="dot-ok"></span> 認証済み（有効期限 約${remaining}分）</span>`;
   document.getElementById('search-section').style.display = 'block';
 }
 
@@ -218,7 +234,8 @@ function showAuthed() {
 async function ytGet(url) {
   const r = await fetch(url, { headers: { Authorization: 'Bearer ' + accessToken } });
   if (r.status === 401) {
-    sessionStorage.removeItem('yt_access_token');
+    localStorage.removeItem('yt_access_token');
+    localStorage.removeItem('yt_token_expires');
     accessToken = null;
     document.getElementById('auth-indicator').innerHTML = '<span style="color:#e74c3c;font-family:var(--font-mono);font-size:13px;">セッション切れ — 再認証してください</span>';
     document.getElementById('search-section').style.display = 'none';
