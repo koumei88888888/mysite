@@ -155,7 +155,7 @@
 <script>
 const REDIRECT_URI = 'https://koumei88888888.github.io/mysite/apps/ym-playlist/';
 const CLIENT_ID = '387151179353-nad0hcdgel2ebljaoajfbp7idjuiluv4.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/youtube';
+const SCOPES = 'https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl';
 
 let accessToken = null;
 let selectedChannel = null;
@@ -437,26 +437,41 @@ async function createPlaylist() {
   msgEl.className = 'msg'; msgEl.textContent = 'トークンを確認中...';
 
   // トークン有効性チェック
+  if (!accessToken) {
+    msgEl.className = 'msg err';
+    msgEl.innerHTML = 'トークンがありません。<br><button class="btn" style="margin-top:8px;" onclick="reAuth()">再認証する</button>';
+    return;
+  }
   try {
     const test = await fetch('https://www.googleapis.com/youtube/v3/channels?part=id&mine=true', {
       headers: { Authorization: 'Bearer ' + accessToken }
     });
     if (test.status === 401) {
+      localStorage.removeItem('yt_access_token');
+      localStorage.removeItem('yt_token_expires');
+      accessToken = null;
       msgEl.className = 'msg err';
       msgEl.innerHTML = 'セッションが切れています。<br><button class="btn" style="margin-top:8px;" onclick="reAuth()">再認証する</button>';
       return;
     }
-  } catch(e) {}
+    msgEl.textContent = `トークン確認OK、プレイリストを作成中...`;
+  } catch(e) {
+    msgEl.textContent = 'ネットワーク確認中...';
+  }
 
   msgEl.textContent = 'プレイリストを作成中...';
   try {
     const plRes = await fetch('https://www.googleapis.com/youtube/v3/playlists?part=snippet,status', {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+      headers: {
+        'Authorization': 'Bearer ' + accessToken,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: JSON.stringify({ snippet: { title: name, description: `${selectedChannel.name} 全曲（インスト・重複除外）` }, status: { privacyStatus: 'private' } })
     });
     const pl = await plRes.json();
-    if (!plRes.ok) throw new Error(pl.error?.message || plRes.status);
+    if (!plRes.ok) throw new Error(`${pl.error?.message || plRes.status} (token: ${accessToken ? accessToken.slice(0,20)+'...' : 'none'})`);
     const plId = pl.id;
 
     let added = 0;
