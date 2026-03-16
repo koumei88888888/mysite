@@ -33,7 +33,6 @@ const APPS = [
     desc:   "アーティスト毎にプレイリストを自動生成する",
     image:  "",
     color:  "#91f040",
-    color:  "#13110a",
     tags:   ["音楽"],
     href:   "./apps/spotify-playlist/index.html",
     status: "live",
