@@ -149,13 +149,18 @@
     </div>
   </div>
 
-  <!-- STEP 2: SEARCH -->
+  <!-- STEP 2: URL INPUT -->
   <div id="search-section" style="display:none;">
-    <div class="label">Step 2 — アーティスト検索</div>
+    <div class="label">Step 2 — アーティストURLを入力</div>
     <div class="card">
+      <div class="hint" style="margin-bottom:12px;">
+        YouTube Music でアーティストページを開き、URLをコピーして貼り付けてください。<br>
+        例: <code style="color:#FF0000;">https://music.youtube.com/channel/UCxxxxxxxx</code><br>
+        または: <code style="color:#FF0000;">https://www.youtube.com/@アーティスト名</code>
+      </div>
       <div class="search-row">
-        <input type="text" id="artist-input" placeholder="アーティスト名を入力..." />
-        <button class="btn" onclick="searchArtist()">検索</button>
+        <input type="text" id="artist-input" placeholder="https://music.youtube.com/channel/UC..." />
+        <button class="btn" onclick="loadArtist()">読み込む</button>
       </div>
       <div id="candidates-area"></div>
     </div>
@@ -236,44 +241,59 @@ async function ytGet(url) {
   return r.json();
 }
 
-/* ---- SEARCH ARTIST (channel search) ---- */
-async function searchArtist() {
-  const q = document.getElementById('artist-input').value.trim();
-  if (!q) return;
-  document.getElementById('candidates-area').innerHTML = '<div class="status-bar" style="margin-top:14px;"><div class="spinner"></div>検索中...</div>';
+/* ---- LOAD ARTIST FROM URL ---- */
+function extractChannelId(input) {
+  input = input.trim();
+  // music.youtube.com/channel/UCxxx
+  let m = input.match(/(?:music\.youtube\.com|youtube\.com)\/channel\/(UC[\w-]+)/);
+  if (m) return { type: 'id', value: m[1] };
+  // youtube.com/@handle or music.youtube.com/@handle
+  m = input.match(/(?:music\.youtube\.com|youtube\.com)\/@([\w.-]+)/);
+  if (m) return { type: 'handle', value: '@' + m[1] };
+  // UCで始まるIDを直接入力
+  m = input.match(/^(UC[\w-]{20,})$/);
+  if (m) return { type: 'id', value: m[1] };
+  return null;
+}
+
+async function loadArtist() {
+  const input = document.getElementById('artist-input').value.trim();
+  const parsed = extractChannelId(input);
+  if (!parsed) {
+    document.getElementById('candidates-area').innerHTML = '<div class="msg err" style="margin-top:10px;">URLの形式が正しくありません。<br>例: https://music.youtube.com/channel/UCxxxxxxxx</div>';
+    return;
+  }
+  document.getElementById('candidates-area').innerHTML = '<div class="status-bar" style="margin-top:14px;"><div class="spinner"></div>アーティスト情報を取得中...</div>';
   document.getElementById('tracks-section').innerHTML = '';
   try {
-    const d = await ytGet(`https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${encodeURIComponent(q)}&maxResults=6`);
-    renderCandidates(d.items);
-  } catch(e) {
-    document.getElementById('candidates-area').innerHTML = `<div class="msg err" style="margin-top:10px;">検索失敗: ${e.message}</div>`;
-  }
-}
-
-function renderCandidates(items) {
-  if (!items?.length) { document.getElementById('candidates-area').innerHTML = '<div class="msg" style="margin-top:10px;">見つかりませんでした</div>'; return; }
-  document.getElementById('candidates-area').innerHTML =
-    '<div class="label" style="margin-top:14px;margin-bottom:8px;">候補 — クリックして選択</div>' +
-    '<div class="candidates-list">' +
-    items.map(it => {
-      const img = it.snippet.thumbnails?.default?.url
-        ? `<img class="c-img" src="${it.snippet.thumbnails.default.url}" />`
-        : '<div class="c-placeholder">♪</div>';
-      return `<div class="candidate" data-id="${it.snippet.channelId}" data-name="${encodeURIComponent(it.snippet.channelTitle)}" onclick="selectChannel(this)">
-        ${img}
-        <div>
-          <div class="c-name">${it.snippet.channelTitle}</div>
-          <div class="c-sub">${it.snippet.description?.slice(0,60) || '—'}</div>
+    let url;
+    if (parsed.type === 'id') {
+      url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&id=${parsed.value}`;
+    } else {
+      url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&forHandle=${encodeURIComponent(parsed.value)}`;
+    }
+    const d = await ytGet(url);
+    const ch = d.items?.[0];
+    if (!ch) throw new Error('チャンネルが見つかりません');
+    const img = ch.snippet.thumbnails?.default?.url
+      ? `<img class="c-img" src="${ch.snippet.thumbnails.default.url}" />`
+      : '<div class="c-placeholder">♪</div>';
+    document.getElementById('candidates-area').innerHTML = `
+      <div class="label" style="margin-top:14px;margin-bottom:8px;">取得したアーティスト</div>
+      <div class="candidates-list">
+        <div class="candidate selected">
+          ${img}
+          <div>
+            <div class="c-name">${ch.snippet.title}</div>
+            <div class="c-sub">${ch.snippet.description?.slice(0,60) || '—'}</div>
+          </div>
         </div>
       </div>`;
-    }).join('') + '</div>';
-}
-
-function selectChannel(el) {
-  document.querySelectorAll('.candidate').forEach(c => c.classList.remove('selected'));
-  el.classList.add('selected');
-  selectedChannel = { id: el.dataset.id, name: decodeURIComponent(el.dataset.name) };
-  fetchAllVideos(selectedChannel.id);
+    selectedChannel = { id: ch.id, name: ch.snippet.title };
+    fetchAllVideos(ch.id, ch.contentDetails.relatedPlaylists.uploads);
+  } catch(e) {
+    document.getElementById('candidates-area').innerHTML = `<div class="msg err" style="margin-top:10px;">取得失敗: ${e.message}</div>`;
+  }
 }
 
 /* ---- FILTERS ---- */
@@ -290,53 +310,86 @@ function normalizeTitle(title) {
 }
 
 /* ---- FETCH ALL VIDEOS ---- */
-async function fetchAllVideos(channelId) {
+async function fetchAllVideos(channelId, uploadsId) {
   const sec = document.getElementById('tracks-section');
   sec.innerHTML = '<div class="status-bar"><div class="spinner"></div>動画一覧を取得中...</div>';
   try {
-    // uploads プレイリストIDを取得
-    const ch = await ytGet(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}`);
-    const uploadsId = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-    if (!uploadsId) throw new Error('アップロードプレイリストが見つかりません');
+    if (!uploadsId) {
+      const ch = await ytGet(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}`);
+      uploadsId = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+      if (!uploadsId) throw new Error('アップロードプレイリストが見つかりません');
+    }
 
-    let videos = [], pageToken = '';
+    // Step1: playlistItemsで全動画IDを取得
+    let items = [], pageToken = '';
     do {
       const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsId}&maxResults=50${pageToken ? '&pageToken='+pageToken : ''}`;
       const d = await ytGet(url);
-      videos = videos.concat(d.items);
+      items = items.concat(d.items);
       pageToken = d.nextPageToken || '';
-      sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>${videos.length} 件取得中...</div>`;
+      sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>${items.length} 件取得中...</div>`;
     } while (pageToken);
 
-    const instCount = videos.filter(v => isInst(v.snippet.title)).length;
-    const withVocal = videos.filter(v => !isInst(v.snippet.title));
+    // Step2: videos APIで動画長・カテゴリを取得（50件ずつ）
+    sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>動画の詳細情報を取得中...</div>`;
+    const videoIds = items.map(it => it.snippet.resourceId?.videoId).filter(Boolean);
+    let videoDetails = [];
+    for (let i = 0; i < videoIds.length; i += 50) {
+      const ids = videoIds.slice(i, i+50).join(',');
+      const d = await ytGet(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${ids}`);
+      videoDetails = videoDetails.concat(d.items);
+    }
 
-    // 重複除去（タイトル正規化）、公開日が早い方を採用
+    // Step3: フィルター
+    // ISO8601duration→秒変換
+    function parseDuration(iso) {
+      const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+      if (!m) return 0;
+      return (parseInt(m[1]||0)*3600) + (parseInt(m[2]||0)*60) + parseInt(m[3]||0);
+    }
+
+    const allCount = videoDetails.length;
+    let shortSkip = 0, instSkip = 0, liveSkip = 0;
+
+    const vocal = videoDetails.filter(v => {
+      const dur = parseDuration(v.contentDetails?.duration || '');
+      const title = v.snippet?.title || '';
+      const liveContent = v.snippet?.liveBroadcastContent;
+      // Shorts除外（60秒以下）
+      if (dur > 0 && dur <= 60) { shortSkip++; return false; }
+      // ライブアーカイブ除外
+      if (liveContent === 'live' || v.contentDetails?.duration === 'P0D') { liveSkip++; return false; }
+      // インスト・offvocal除外
+      if (isInst(title)) { instSkip++; return false; }
+      return true;
+    });
+
+    // Step4: 重複除去
     const map = new Map(); let dupCount = 0;
-    withVocal.forEach(v => {
+    vocal.forEach(v => {
       const key = normalizeTitle(v.snippet.title);
       const date = v.snippet.publishedAt || '';
       if (!map.has(key)) { map.set(key, v); }
-      else { dupCount++; if (date < (map.get(key).snippet.publishedAt || '')) map.set(key, v); }
+      else { dupCount++; if (date < (map.get(key).snippet.publishedAt||'')) map.set(key, v); }
     });
 
     filteredVideos = Array.from(map.values())
       .sort((a,b) => (a.snippet.publishedAt||'').localeCompare(b.snippet.publishedAt||''));
 
-    renderTracks(filteredVideos, instCount, dupCount);
+    renderTracks(filteredVideos, instSkip + shortSkip + liveSkip, dupCount, shortSkip, liveSkip, instSkip);
   } catch(e) {
     sec.innerHTML = `<div class="msg err">取得失敗: ${e.message}</div>`;
   }
 }
 
 /* ---- RENDER ---- */
-function renderTracks(videos, instCount, dupCount) {
+function renderTracks(videos, skipCount, dupCount, shortSkip, liveSkip, instSkip) {
   document.getElementById('tracks-section').innerHTML = `
     <div class="label">Step 3 — プレイリスト作成</div>
     <div class="card">
       <div class="stats">
         <div class="stat"><div class="stat-num">${videos.length}</div><div class="stat-lbl">収録曲</div></div>
-        <div class="stat"><div class="stat-num">${instCount}</div><div class="stat-lbl">インスト除外</div></div>
+        <div class="stat"><div class="stat-num">${skipCount}</div><div class="stat-lbl">除外（Shorts/Live/Inst）</div></div>
         <div class="stat"><div class="stat-num">${dupCount}</div><div class="stat-lbl">重複除外</div></div>
       </div>
       <div class="pl-name-row">
@@ -347,14 +400,14 @@ function renderTracks(videos, instCount, dupCount) {
       <div class="track-list">
         ${videos.map((v,i) => {
           const s = v.snippet;
-          const thumb = s.thumbnails?.default?.url;
+          const thumb = s.thumbnails?.medium?.url || s.thumbnails?.default?.url;
           const date = (s.publishedAt||'').slice(0,10);
           return `<div class="track-item">
             <span class="t-num">${i+1}</span>
             ${thumb ? `<img class="t-thumb" src="${thumb}" />` : '<div class="t-thumb-ph"></div>'}
             <div class="t-info">
               <div class="t-name">${s.title}</div>
-              <div class="t-ch">${s.channelTitle}</div>
+              <div class="t-ch">${s.channelTitle||''}</div>
             </div>
             <span class="t-date">${date}</span>
           </div>`;
@@ -386,7 +439,7 @@ async function createPlaylist() {
     let added = 0;
     for (const v of filteredVideos) {
       msgEl.textContent = `追加中... (${++added} / ${filteredVideos.length})`;
-      const videoId = v.snippet.resourceId?.videoId || v.snippet.videoId;
+      const videoId = v.id;
       await fetch('https://www.googleapis.com/youtube/v3/playlistItems?part=snippet', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
@@ -415,7 +468,7 @@ function exportCSV() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && document.activeElement.id === 'artist-input') searchArtist();
+  if (e.key === 'Enter' && document.activeElement.id === 'artist-input') loadArtist();
 });
 window.addEventListener('load', checkAuth);
 </script>
