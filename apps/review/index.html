@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ReView — 読む・見る・遊ぶ、すべてのレビュー</title>
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+  <nav class="site-nav" id="site-nav"></nav>
+
+  <main class="page">
+    <header class="page-header">
+      <div class="eyebrow">All Reviews</div>
+      <h1>最新<span>レビュー</span></h1>
+      <p class="desc">漫画・ゲームなど、あらゆるメディアのレビューを独自スコアで紹介します。</p>
+    </header>
+    <div id="home-sections"></div>
+  </main>
+
+  <footer class="site-footer" id="site-footer"></footer>
+
+  <script src="./js/data.js"></script>
+  <script src="./js/utils.js"></script>
+  <script>
+    buildNav('home');
+    buildFooter();
+
+    const sectionsEl = document.getElementById('home-sections');
+    const sorted = [...REVIEWS].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // 全記事グリッド
+    const allTitle = document.createElement('h2');
+    allTitle.className = 'section-title';
+    allTitle.textContent = '🆕 新着順';
+    sectionsEl.appendChild(allTitle);
+
+    const allGrid = document.createElement('div');
+    allGrid.className = 'card-grid';
+    sorted.forEach(r => allGrid.appendChild(createCard(r)));
+    sectionsEl.appendChild(allGrid);
+    applyCardDelay(allGrid);
+
+    // カテゴリ別ピックアップ
+    SITE_CONFIG.categories.forEach(cat => {
+      const items = sorted.filter(r => r.category === cat.id).slice(0, 4);
+      if (!items.length) return;
+
+      const wrap = document.createElement('section');
+      wrap.style.marginTop = '64px';
+
+      const header = document.createElement('div');
+      header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;';
+
+      const title = document.createElement('h2');
+      title.className = 'section-title';
+      title.style.cssText = 'margin-bottom:0;flex:1;';
+      title.textContent = `${cat.emoji} ${cat.label}`;
+
+      const more = document.createElement('a');
+      more.href = `./${cat.id}/index.html`;
+      more.style.cssText = `font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;
+        border:1px solid var(--border);padding:5px 14px;border-radius:20px;
+        transition:all .2s;white-space:nowrap;margin-left:16px;`;
+      more.textContent = 'すべて見る →';
+      more.onmouseenter = () => { more.style.color='var(--text)'; more.style.borderColor='rgba(255,255,255,.2)'; };
+      more.onmouseleave = () => { more.style.color='var(--muted)'; more.style.borderColor='var(--border)'; };
+
+      header.appendChild(title);
+      header.appendChild(more);
+      wrap.appendChild(header);
+
+      const grid = document.createElement('div');
+      grid.className = 'card-grid';
+      items.forEach(r => grid.appendChild(createCard(r)));
+      applyCardDelay(grid);
+      wrap.appendChild(grid);
+      sectionsEl.appendChild(wrap);
+    });
+  </script>
+</body>
+</html>

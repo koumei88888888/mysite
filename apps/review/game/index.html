@@ -3,22 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>漫画レビュー — ReView</title>
+  <title>ゲームレビュー — ReView</title>
   <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
-
   <nav class="site-nav" id="site-nav"></nav>
 
   <main class="page">
     <header class="page-header">
       <div class="eyebrow">Category</div>
-      <h1>📚 <span>漫画</span></h1>
+      <h1>🎮 <span>ゲーム</span></h1>
       <p class="desc">独自スコアで徹底レビュー。スコア順・フィルタリングで作品を探せます。</p>
     </header>
 
-    <!-- コントロールバー -->
-    <div class="controls" id="controls">
+    <div class="controls">
       <div class="filter-group">
         <label>並び替え</label>
         <select id="sort-select">
@@ -45,28 +43,25 @@
   <script src="../js/data.js"></script>
   <script src="../js/utils.js"></script>
   <script>
-    const CATEGORY_ID = 'manga';
-
+    const CATEGORY_ID = 'game';
     buildNav(CATEGORY_ID);
     buildFooter();
 
-    const grid      = document.getElementById('card-grid');
-    const sortSel   = document.getElementById('sort-select');
+    const grid = document.getElementById('card-grid');
+    const sortSel = document.getElementById('sort-select');
     const scoreSlider = document.getElementById('score-filter');
-    const scoreVal  = document.getElementById('score-val');
-    const countEl   = document.getElementById('count');
+    const scoreVal = document.getElementById('score-val');
+    const countEl = document.getElementById('count');
 
     function render() {
-      const sortKey  = sortSel.value;
+      const sortKey = sortSel.value;
       const minScore = parseFloat(scoreSlider.value);
-
       scoreVal.textContent = `★ ${minScore.toFixed(1)}+`;
 
       let items = REVIEWS.filter(r => r.category === CATEGORY_ID && r.score >= minScore);
-
       items.sort((a, b) => {
-        if (sortKey === 'date-desc')  return new Date(b.date)  - new Date(a.date);
-        if (sortKey === 'date-asc')   return new Date(a.date)  - new Date(b.date);
+        if (sortKey === 'date-desc')  return new Date(b.date) - new Date(a.date);
+        if (sortKey === 'date-asc')   return new Date(a.date) - new Date(b.date);
         if (sortKey === 'score-desc') return b.score - a.score;
         if (sortKey === 'score-asc')  return a.score - b.score;
       });
@@ -75,13 +70,9 @@
       countEl.textContent = items.length;
 
       if (!items.length) {
-        grid.innerHTML = `<div class="empty-state">
-          <div class="icon">🔍</div>
-          <p>条件に一致するレビューがありません</p>
-        </div>`;
+        grid.innerHTML = `<div class="empty-state"><div class="icon">🔍</div><p>条件に一致するレビューがありません</p></div>`;
         return;
       }
-
       items.forEach(r => grid.appendChild(createCard(r)));
       applyCardDelay(grid);
     }

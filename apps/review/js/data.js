@@ -4,6 +4,7 @@
 const SITE_CONFIG = {
   title: "ReView",
   subtitle: "読む・見る・遊ぶ、すべてのレビュー",
+  portalHref: "../../index.html",   // ポータルホームへの相対パス
   categories: [
     { id: "manga",  label: "漫画", emoji: "📚", color: "#e84393" },
     { id: "game",   label: "ゲーム", emoji: "🎮", color: "#7c3aed" },

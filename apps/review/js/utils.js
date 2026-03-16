@@ -1,13 +1,11 @@
 // ==============================
-//  Helper utilities
+//  Helper utilities (apps/review/js/utils.js)
 // ==============================
 
-/** カテゴリ設定を id で引く */
 function getCategoryConfig(id) {
   return SITE_CONFIG.categories.find(c => c.id === id) || { label: id, emoji: "📄", color: "#888" };
 }
 
-/** ★ 表示文字列 (0.5刻み) */
 function starsHTML(score) {
   const full  = Math.floor(score);
   const half  = score - full >= 0.5 ? 1 : 0;
@@ -15,20 +13,15 @@ function starsHTML(score) {
   return '★'.repeat(full) + (half ? '⭐' : '') + '☆'.repeat(empty);
 }
 
-/** 日付を整形 */
 function formatDate(iso) {
   const d = new Date(iso);
   return `${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
 }
 
-/** レビューカード DOM を返す */
 function createCard(review) {
   const cat = getCategoryConfig(review.category);
-
   const card = document.createElement('article');
   card.className = 'review-card';
-  card.style.setProperty('--cat-color', cat.color);
-
   card.innerHTML = `
     <img class="card-thumb" src="${review.thumbnail}" alt="${review.title}" loading="lazy">
     <div class="card-body">
@@ -61,19 +54,16 @@ function buildNav(activePage) {
   const nav = document.getElementById('site-nav');
   if (!nav) return;
 
-  // 現在のパス深さを調べてルートへの相対パスを決定
-  // ルート(index.html) → base=""、サブディレクトリ(manga/index.html) → base="../"
-  const depth = location.pathname.replace(/\/[^/]*$/, '').split('/').filter(Boolean).length;
-  const isSubDir = depth > 0 && !location.pathname.endsWith('/') === false || location.pathname.split('/').filter(Boolean).length > 1;
-
-  // パスの階層を pathname から判定（ファイル名除いた最後のセグメント数で判断）
-  const pathParts = location.pathname.split('/').filter(Boolean);
-  // GitHub Pages: /repo/manga/index.html → parts=['repo','manga','index.html']
-  // ローカル: /manga/index.html → parts=['manga','index.html']
-  // ルートにいるか（最後がindex.htmlでその前がカテゴリIDか）で判定
+  // カテゴリサブディレクトリ内かどうかを判定してベースパスを決定
   const catIds = SITE_CONFIG.categories.map(c => c.id);
+  const pathParts = location.pathname.split('/').filter(Boolean);
   const inCategory = pathParts.length >= 2 && catIds.includes(pathParts[pathParts.length - 2]);
   const base = inCategory ? '../' : './';
+
+  // ポータルへの戻りリンク（data.jsで設定）
+  const portalHref = inCategory
+    ? '../../index.html'
+    : (SITE_CONFIG.portalHref || '../../index.html');
 
   const tabs = [
     { href: `${base}index.html`, id: 'home', label: 'HOME', emoji: '🏠' },
@@ -87,6 +77,7 @@ function buildNav(activePage) {
 
   nav.innerHTML = `
     <div class="nav-inner">
+      <a class="nav-back" href="${portalHref}">← Portal</a>
       <span class="nav-logo">${SITE_CONFIG.title}</span>
       <ul class="nav-tabs">
         ${tabs.map(t => `
@@ -101,14 +92,12 @@ function buildNav(activePage) {
   `;
 }
 
-/** フッターを生成 */
 function buildFooter() {
   const f = document.getElementById('site-footer');
   if (!f) return;
   f.innerHTML = `<p>© ${new Date().getFullYear()} ${SITE_CONFIG.title} — All reviews are personal opinions.</p>`;
 }
 
-/** カードにアニメーション遅延を付与 */
 function applyCardDelay(container) {
   container.querySelectorAll('.review-card').forEach((c, i) => {
     c.style.animationDelay = `${i * 60}ms`;

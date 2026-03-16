@@ -1,67 +1,65 @@
-# ReView — GitHub Pages レビューサイト雛形
+# My Portal — GitHub Pages
 
-## ファイル構成
+## ディレクトリ構成
 
 ```
-review-site/
-├── index.html          ← HOMEページ（全記事・新着順）
-├── css/
-│   └── style.css       ← 共通スタイル
-├── js/
-│   ├── data.js         ← ★ レビューデータ・サイト設定（ここを編集）
-│   └── utils.js        ← カード生成・ナビ生成などの共通関数
-├── manga/
-│   └── index.html      ← 漫画カテゴリページ
-└── game/
-    └── index.html      ← ゲームカテゴリページ
+(リポジトリルート)/
+│
+├── index.html                  ← ★ ポータルホーム（入口）
+│
+├── shared/                     ← サービス横断の共通資産
+│   ├── css/
+│   │   └── portal.css          ← ポータルホームのスタイル
+│   └── js/
+│       └── portal.js           ← ★ アプリ定義はここに追加
+│
+└── apps/                       ← 各サービスをここに格納
+    │
+    ├── review/                 ← レビューサイト
+    │   ├── index.html
+    │   ├── css/style.css
+    │   ├── js/
+    │   │   ├── data.js         ← ★ レビューデータ・カテゴリ設定
+    │   │   └── utils.js
+    │   ├── manga/index.html
+    │   └── game/index.html
+    │
+    └── （次のサービス）/       ← 新サービスはここに追加
 ```
 
 ---
 
-## カスタマイズ方法
+## 新しいサービスを追加する手順
 
-### 1. レビューを追加する（`js/data.js`）
-
-`REVIEWS` 配列にオブジェクトを追加してください。
+### 1. `shared/js/portal.js` の `APPS` 配列にエントリを追加
 
 ```js
 {
-  id: 9,                          // ユニークなID（数字）
-  category: "manga",              // カテゴリID（下記参照）
-  title: "タイトル",
-  subtitle: "著者名 など",
-  score: 4.5,                     // 1.0 〜 5.0
-  date: "2025-03-12",             // 投稿日（新着順ソートに使用）
-  tags: ["タグ1", "タグ2"],
-  thumbnail: "https://...",       // サムネイル画像URL
-  summary: "あらすじや感想...",
-}
+  id:      "blog",
+  name:    "Blog",
+  desc:    "日々の記録や技術メモを発信するブログ。",
+  emoji:   "📝",
+  color:   "#60a5fa",       // アクセントカラー
+  bgColor: "#080d14",       // バナー背景色
+  tags:    ["日記", "技術"],
+  href:    "./apps/blog/index.html",
+  status:  "live",          // "live" | "wip" | "soon"
+},
 ```
 
-### 2. カテゴリを追加する（`js/data.js`）
+### 2. `apps/` 以下にサービスのフォルダを作成
 
-`SITE_CONFIG.categories` に追加し、対応する HTML ページを作成します。
-
-```js
-{ id: "anime", label: "アニメ", emoji: "🎬", color: "#06b6d4" }
+```
+apps/blog/
+└── index.html
 ```
 
-新しいカテゴリページは `manga/index.html` をコピーして
-`const CATEGORY_ID = 'anime';` の部分を変更するだけです。
+それだけでポータルホームにカードが表示されます。
 
 ---
 
-## GitHub Pages への公開手順
+## GitHub Pages への公開
 
-1. このフォルダを GitHub リポジトリにプッシュ
-2. リポジトリの `Settings` → `Pages` → Source を `main` ブランチのルートに設定
-3. 数分後に `https://<username>.github.io/<repo>/` で公開されます
-
----
-
-## 機能一覧
-
-- **HOME** : 全記事を新着順で表示 + カテゴリ別ピックアップ
-- **カテゴリページ** : 新着順 / スコア高低でソート可能 / 最低スコアでフィルタリング可能
-- **レスポンシブ** : スマートフォン対応
-- **外部依存なし** : Google Fonts のみ（オフライン不可の場合はフォールバックあり）
+1. このフォルダ全体をリポジトリのルートにプッシュ
+2. `Settings` → `Pages` → Source を `main` ブランチのルート (`/`) に設定
+3. `https://<username>.github.io/<repo>/` でポータルが公開されます
