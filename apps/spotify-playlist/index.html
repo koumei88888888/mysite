@@ -7,92 +7,27 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
   :root {
-    --green: #1DB954;
-    --green-dim: #158a3e;
-    --bg: #0a0a0a;
-    --surface: #141414;
-    --surface2: #1e1e1e;
-    --border: rgba(255,255,255,0.08);
-    --border2: rgba(255,255,255,0.14);
-    --text: #f0f0f0;
-    --muted: #888;
-    --dimmer: #555;
-    --font-display: 'Syne', sans-serif;
-    --font-mono: 'DM Mono', monospace;
+    --green: #1DB954; --green-dim: #158a3e;
+    --bg: #0a0a0a; --surface: #141414; --surface2: #1e1e1e;
+    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
+    --text: #f0f0f0; --muted: #888; --dimmer: #555;
+    --font-display: 'Syne', sans-serif; --font-mono: 'DM Mono', monospace;
   }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-display); min-height: 100vh; }
+  .shell { max-width: 760px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--font-display);
-    min-height: 100vh;
-  }
-
-  /* ---- LAYOUT ---- */
-  .shell {
-    max-width: 760px;
-    margin: 0 auto;
-    padding: 3rem 1.5rem 6rem;
-  }
-
-  /* ---- HEADER ---- */
-  header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 3rem;
-  }
-  .logo-mark {
-    width: 44px; height: 44px;
-    background: var(--green);
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-  }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 3rem; }
+  .logo-mark { width: 44px; height: 44px; background: var(--green); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .logo-mark svg { width: 24px; height: 24px; fill: #000; }
-  .header-text h1 {
-    font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
-    color: var(--text);
-  }
+  .header-text h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
   .header-text p { font-size: 13px; color: var(--muted); margin-top: 2px; font-family: var(--font-mono); }
 
-  /* ---- SECTION LABELS ---- */
-  .label {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--dimmer);
-    margin-bottom: 8px;
-  }
+  .label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dimmer); margin-bottom: 8px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
 
-  /* ---- CARDS ---- */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 1.25rem 1.5rem;
-    margin-bottom: 1.5rem;
-  }
-
-  /* ---- SETUP CARD ---- */
-  .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
-  @media(max-width:520px){ .setup-grid { grid-template-columns: 1fr; } }
   .field label { display: block; font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-bottom: 5px; letter-spacing: 0.05em; }
-  input[type=text] {
-    width: 100%;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text);
-    font-family: var(--font-mono);
-    font-size: 13px;
-    padding: 9px 12px;
-    outline: none;
-    transition: border-color 0.15s;
-  }
+  input[type=text] { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--font-mono); font-size: 13px; padding: 9px 12px; outline: none; transition: border-color 0.15s; }
   input[type=text]:focus { border-color: var(--green); }
   input[type=text]::placeholder { color: var(--dimmer); }
 
@@ -100,105 +35,40 @@
   .hint a { color: var(--green); text-decoration: none; }
   .hint a:hover { text-decoration: underline; }
 
-  /* ---- BUTTONS ---- */
-  .btn {
-    display: inline-flex; align-items: center; gap: 7px;
-    background: var(--green);
-    color: #000;
-    font-family: var(--font-display);
-    font-size: 14px; font-weight: 600;
-    border: none; border-radius: 999px;
-    padding: 10px 22px;
-    cursor: pointer;
-    transition: background 0.15s, transform 0.1s;
-  }
+  .btn { display: inline-flex; align-items: center; gap: 7px; background: var(--green); color: #000; font-family: var(--font-display); font-size: 14px; font-weight: 600; border: none; border-radius: 999px; padding: 10px 22px; cursor: pointer; transition: background 0.15s, transform 0.1s; }
   .btn:hover { background: #22d860; }
   .btn:active { transform: scale(0.97); }
   .btn:disabled { background: var(--surface2); color: var(--dimmer); cursor: not-allowed; }
-  .btn-ghost {
-    background: transparent;
-    color: var(--text);
-    border: 1px solid var(--border2);
-    border-radius: 999px;
-    font-family: var(--font-display);
-    font-size: 14px; font-weight: 600;
-    padding: 10px 22px;
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
-  }
+  .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border2); border-radius: 999px; font-family: var(--font-display); font-size: 14px; font-weight: 600; padding: 10px 22px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
   .btn-ghost:hover { border-color: var(--green); color: var(--green); }
 
-  /* ---- SEARCH ROW ---- */
   .search-row { display: flex; gap: 10px; }
   .search-row input { flex: 1; font-size: 15px; padding: 11px 14px; }
 
-  /* ---- CANDIDATES ---- */
   .candidates-list { border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
-  .candidate {
-    display: flex; align-items: center; gap: 14px;
-    padding: 12px 16px;
-    cursor: pointer;
-    border-bottom: 1px solid var(--border);
-    transition: background 0.12s;
-    background: var(--surface);
-  }
+  .candidate { display: flex; align-items: center; gap: 14px; padding: 12px 16px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.12s; background: var(--surface); }
   .candidate:last-child { border-bottom: none; }
   .candidate:hover { background: var(--surface2); }
   .candidate.selected { background: rgba(29,185,84,0.08); border-left: 3px solid var(--green); }
-  .c-img {
-    width: 46px; height: 46px; border-radius: 50%;
-    object-fit: cover; flex-shrink: 0;
-    background: var(--surface2);
-  }
-  .c-placeholder {
-    width: 46px; height: 46px; border-radius: 50%;
-    background: var(--surface2); flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 20px;
-  }
+  .c-img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--surface2); }
+  .c-placeholder { width: 46px; height: 46px; border-radius: 50%; background: var(--surface2); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; }
   .c-name { font-size: 15px; font-weight: 600; }
   .c-genre { font-size: 12px; color: var(--muted); margin-top: 2px; font-family: var(--font-mono); }
   .c-follow { font-size: 11px; color: var(--dimmer); margin-top: 2px; font-family: var(--font-mono); }
 
-  /* ---- STATUS BAR ---- */
-  .status-bar {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 14px;
-    background: var(--surface2);
-    border-radius: 8px;
-    font-family: var(--font-mono); font-size: 13px; color: var(--muted);
-    margin-bottom: 1rem;
-  }
-  .spinner {
-    width: 14px; height: 14px;
-    border: 2px solid var(--border2);
-    border-top-color: var(--green);
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    flex-shrink: 0;
-  }
+  .status-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--surface2); border-radius: 8px; font-family: var(--font-mono); font-size: 13px; color: var(--muted); margin-bottom: 1rem; }
+  .spinner { width: 14px; height: 14px; border: 2px solid var(--border2); border-top-color: var(--green); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ---- STATS ---- */
   .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 1.25rem; }
-  .stat {
-    background: var(--surface2);
-    border-radius: 8px; padding: 12px;
-    text-align: center;
-  }
+  .stat { background: var(--surface2); border-radius: 8px; padding: 12px; text-align: center; }
   .stat-num { font-size: 26px; font-weight: 700; color: var(--green); letter-spacing: -0.03em; }
   .stat-lbl { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-top: 3px; }
 
-  /* ---- TRACK LIST ---- */
   .track-list { max-height: 420px; overflow-y: auto; margin-bottom: 1.25rem; }
   .track-list::-webkit-scrollbar { width: 4px; }
-  .track-list::-webkit-scrollbar-track { background: transparent; }
   .track-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
-  .track-item {
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border);
-  }
+  .track-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
   .track-item:last-child { border-bottom: none; }
   .t-num { font-family: var(--font-mono); font-size: 12px; color: var(--dimmer); width: 26px; text-align: right; flex-shrink: 0; }
   .t-thumb { width: 38px; height: 38px; border-radius: 5px; object-fit: cover; background: var(--surface2); flex-shrink: 0; }
@@ -208,33 +78,21 @@
   .t-album { font-family: var(--font-mono); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
   .t-date { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); flex-shrink: 0; }
 
-  /* ---- PLAYLIST NAME ---- */
   .pl-name-row { display: flex; align-items: center; gap: 10px; margin-bottom: 1rem; }
   .pl-name-row label { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
   .pl-name-row input { flex: 1; }
-
-  /* ---- ACTION ROW ---- */
   .action-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
-  /* ---- MESSAGES ---- */
   .msg { font-family: var(--font-mono); font-size: 13px; margin-top: 10px; }
   .msg.ok { color: var(--green); }
   .msg.err { color: #e74c3c; }
   .msg a { color: var(--green); }
 
-  /* ---- AUTH STATUS ---- */
   .auth-status { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 13px; }
   .dot-ok { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
 
-  /* ---- SECTION DIVIDER ---- */
-  .section-gap { height: 1.5rem; }
-
-  /* ---- INSTRUCTIONS ---- */
   details { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 1.5rem; }
-  summary {
-    padding: 12px 16px; cursor: pointer; font-size: 14px; font-weight: 600;
-    background: var(--surface); list-style: none; display: flex; align-items: center; justify-content: space-between;
-  }
+  summary { padding: 12px 16px; cursor: pointer; font-size: 14px; font-weight: 600; background: var(--surface); list-style: none; display: flex; align-items: center; justify-content: space-between; }
   summary::-webkit-details-marker { display: none; }
   summary::after { content: '＋'; color: var(--green); font-size: 16px; }
   details[open] summary::after { content: '－'; }
@@ -243,6 +101,7 @@
   .instructions-body li { margin-bottom: 4px; }
   .instructions-body code { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; color: var(--text); }
   .instructions-body a { color: var(--green); }
+  .setup-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 14px; }
 </style>
 </head>
 <body>
@@ -262,14 +121,12 @@
     <summary>使い方 / セットアップ手順</summary>
     <div class="instructions-body">
       <ol>
-        <li>GitHubで <code>spotify-playlist</code> という名前の <strong>publicリポジトリ</strong>を作成</li>
-        <li>このHTMLを <code>index.html</code> にリネームしてリポジトリにアップロード</li>
-        <li>リポジトリの「Settings」→「Pages」→ Branch: <code>main</code> / <code>/(root)</code> → Save でGitHub Pagesを有効化</li>
-        <li>数分後に <code>https://koumei88888888.github.io/mysite/apps/spotify-playlist/</code> でアクセス確認</li>
-        <li><a href="https://developer.spotify.com/dashboard" target="_blank">Spotify Dashboard</a> →「Edit Settings」→ Redirect URIs に上記URLを追加して保存</li>
-        <li>下の「Redirect URI」欄を自分のGitHub PagesのURLに書き換え→「Spotify で認証」</li>
+        <li><a href="https://developer.spotify.com/dashboard" target="_blank">Spotify Dashboard</a> でアプリを作成（Web API にチェック）</li>
+        <li>「Edit Settings」→ Redirect URIs に <code>https://koumei88888888.github.io/mysite/apps/spotify-playlist/</code> を追加して保存</li>
+        <li>Client ID をコピーして下の欄に貼り付け</li>
+        <li>「Spotify で認証」→ 認証後このページに自動で戻ってきます</li>
+        <li>アーティストを検索 → 候補から選択 → プレイリスト作成</li>
       </ol>
-      <p style="margin-top:10px; color:#666;">※ 必ずGitHub PagesのURL上からアクセスしてください（ローカルファイルでは動きません）</p>
     </div>
   </details>
 
@@ -281,16 +138,13 @@
         <label>Client ID</label>
         <input type="text" id="client-id" placeholder="あなたの Client ID" />
       </div>
-      <div class="field">
-        <label>Redirect URI</label>
-        <input type="text" id="redirect-uri" value="https://koumei88888888.github.io/mysite/apps/spotify-playlist/" />
-      </div>
     </div>
     <div class="hint">
-      <a href="https://developer.spotify.com/dashboard" target="_blank">Spotify Developer Dashboard</a> でアプリを作成し、Redirect URI に <strong>https://koumei88888888.github.io/mysite/apps/spotify-playlist/</strong> を登録してください。
+      Redirect URI は <strong>https://koumei88888888.github.io/mysite/apps/spotify-playlist/</strong> を使用します。<br>
+      <a href="https://developer.spotify.com/dashboard" target="_blank">Spotify Dashboard</a> の Edit Settings → Redirect URIs に上記を登録してください。
     </div>
     <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
-      <button class="btn" id="auth-btn" onclick="startAuth()">Spotify で認証</button>
+      <button class="btn" onclick="startAuth()">Spotify で認証</button>
       <span id="auth-indicator"></span>
     </div>
   </div>
@@ -311,41 +165,108 @@
   <div id="tracks-section"></div>
 
 </div>
-
 <script>
+const REDIRECT_URI = 'https://koumei88888888.github.io/mysite/apps/spotify-playlist/';
+const SCOPES = 'playlist-modify-public playlist-modify-private user-read-private';
+
 let accessToken = null;
 let selectedArtist = null;
 let filteredTracks = [];
 
-/* ---- AUTH ---- */
-function saveSettings() {
-  localStorage.setItem('sp_cid', document.getElementById('client-id').value.trim());
-  localStorage.setItem('sp_ruri', document.getElementById('redirect-uri').value.trim());
+/* ---- PKCE helpers ---- */
+function generateRandom(len) {
+  const arr = new Uint8Array(len);
+  crypto.getRandomValues(arr);
+  return btoa(String.fromCharCode(...arr)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+async function sha256(plain) {
+  const enc = new TextEncoder().encode(plain);
+  const hash = await crypto.subtle.digest('SHA-256', enc);
+  return btoa(String.fromCharCode(...new Uint8Array(hash))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 }
 
-function startAuth() {
+/* ---- AUTH ---- */
+async function startAuth() {
   const cid = document.getElementById('client-id').value.trim();
-  const ruri = document.getElementById('redirect-uri').value.trim();
-  if (!cid || !ruri) { alert('Client ID と Redirect URI を入力してください'); return; }
-  saveSettings();
-  const p = new URLSearchParams({ response_type:'token', client_id:cid, scope:'playlist-modify-public playlist-modify-private user-read-private', redirect_uri:ruri, show_dialog:'true' });
+  if (!cid) { alert('Client ID を入力してください'); return; }
+  localStorage.setItem('sp_cid', cid);
+
+  const verifier = generateRandom(64);
+  const challenge = await sha256(verifier);
+  const state = generateRandom(16);
+
+  sessionStorage.setItem('pkce_verifier', verifier);
+  sessionStorage.setItem('pkce_state', state);
+
+  const p = new URLSearchParams({
+    response_type: 'code',
+    client_id: cid,
+    scope: SCOPES,
+    redirect_uri: REDIRECT_URI,
+    state: state,
+    code_challenge_method: 'S256',
+    code_challenge: challenge,
+  });
   window.location.href = 'https://accounts.spotify.com/authorize?' + p;
 }
 
-function checkAuth() {
-  const hash = window.location.hash.substring(1);
-  const params = new URLSearchParams(hash);
-  const t = params.get('access_token');
-  if (t) {
-    accessToken = t;
-    window.history.replaceState(null, '', window.location.pathname);
-    document.getElementById('auth-indicator').innerHTML = '<span class="auth-status"><span class="dot-ok"></span> 認証済み</span>';
-    document.getElementById('search-section').style.display = 'block';
-  }
+async function exchangeCode(code) {
   const cid = localStorage.getItem('sp_cid');
-  const ruri = localStorage.getItem('sp_ruri');
+  const verifier = sessionStorage.getItem('pkce_verifier');
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: REDIRECT_URI,
+      client_id: cid,
+      code_verifier: verifier,
+    })
+  });
+  if (!res.ok) throw new Error('Token exchange failed: ' + res.status);
+  return res.json();
+}
+
+async function checkAuth() {
+  const cid = localStorage.getItem('sp_cid');
   if (cid) document.getElementById('client-id').value = cid;
-  if (ruri) document.getElementById('redirect-uri').value = ruri;
+
+  // トークンがすでに保存されている場合
+  const saved = sessionStorage.getItem('sp_access_token');
+  if (saved) {
+    accessToken = saved;
+    showAuthed();
+    return;
+  }
+
+  // コールバック処理
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const state = params.get('state');
+  const savedState = sessionStorage.getItem('pkce_state');
+
+  if (code) {
+    if (state !== savedState) {
+      document.getElementById('auth-indicator').innerHTML = '<span style="color:#e74c3c;font-family:var(--font-mono);font-size:13px;">state mismatch — 再度認証してください</span>';
+      return;
+    }
+    try {
+      const data = await exchangeCode(code);
+      accessToken = data.access_token;
+      sessionStorage.setItem('sp_access_token', accessToken);
+      // URLをきれいにする
+      window.history.replaceState(null, '', window.location.pathname);
+      showAuthed();
+    } catch(e) {
+      document.getElementById('auth-indicator').innerHTML = `<span style="color:#e74c3c;font-family:var(--font-mono);font-size:13px;">認証失敗: ${e.message}</span>`;
+    }
+  }
+}
+
+function showAuthed() {
+  document.getElementById('auth-indicator').innerHTML = '<span class="auth-status"><span class="dot-ok"></span> 認証済み</span>';
+  document.getElementById('search-section').style.display = 'block';
 }
 
 /* ---- API ---- */
@@ -369,7 +290,7 @@ async function searchArtists() {
   }
 }
 
-function fmt(n) { return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? Math.round(n/1000)+'K' : n; }
+function fmt(n) { return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? Math.round(n/1000)+'K' : String(n); }
 
 function renderCandidates(artists) {
   if (!artists.length) { document.getElementById('candidates-area').innerHTML = '<div class="msg">見つかりませんでした</div>'; return; }
@@ -377,15 +298,12 @@ function renderCandidates(artists) {
     '<div class="label" style="margin-bottom:8px;">候補 — クリックして選択</div>' +
     '<div class="candidates-list">' +
     artists.map(a => {
-      const img = a.images?.length
-        ? `<img class="c-img" src="${a.images[a.images.length-1].url}" />`
-        : '<div class="c-placeholder">♪</div>';
-      const genres = a.genres.slice(0,2).join(' · ') || '—';
+      const img = a.images?.length ? `<img class="c-img" src="${a.images[a.images.length-1].url}" />` : '<div class="c-placeholder">♪</div>';
       return `<div class="candidate" data-id="${a.id}" data-name="${encodeURIComponent(a.name)}" onclick="selectArtist(this)">
         ${img}
         <div>
           <div class="c-name">${a.name}</div>
-          <div class="c-genre">${genres}</div>
+          <div class="c-genre">${a.genres.slice(0,2).join(' · ') || '—'}</div>
           <div class="c-follow">${fmt(a.followers.total)} followers</div>
         </div>
       </div>`;
@@ -403,7 +321,6 @@ function selectArtist(el) {
 function isInst(name) {
   return /instrumental|off\s?vocal|カラオケ|インスト|\bInst\.?\b|\(inst\b|\[inst\b|BGM|offvocal/i.test(name);
 }
-
 function normalizeTitle(name) {
   return name.toLowerCase()
     .replace(/[\s\u3000]+/g, ' ')
@@ -416,19 +333,13 @@ function normalizeTitle(name) {
 async function fetchAll(artistId) {
   const sec = document.getElementById('tracks-section');
   sec.innerHTML = '<div class="status-bar"><div class="spinner"></div>アルバム一覧を取得中...</div>';
-
   try {
     let albums = [], url = `https://api.spotify.com/v1/artists/${artistId}/albums?include_groups=album,single&limit=50&market=JP`;
-    while (url) {
-      const d = await api(url);
-      albums = albums.concat(d.items);
-      url = d.next;
-    }
-
-    sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>${albums.length} アルバム/シングルからトラックを取得中...</div>`;
+    while (url) { const d = await api(url); albums = albums.concat(d.items); url = d.next; }
 
     let raw = [];
     for (let i = 0; i < albums.length; i += 5) {
+      sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>${albums.length} 作品中 ${i} 件処理済み...</div>`;
       const chunk = albums.slice(i, i+5);
       const results = await Promise.all(chunk.map(al =>
         api(`https://api.spotify.com/v1/albums/${al.id}/tracks?limit=50&market=JP`).then(d => ({ al, tracks: d.items }))
@@ -438,25 +349,20 @@ async function fetchAll(artistId) {
         albumName: al.name, albumImg: al.images?.[al.images.length-1]?.url || null,
         releaseDate: al.release_date || ''
       })));
-      sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>取得中... (${Math.min((i+5)*10, raw.length)} トラック取得済み)</div>`;
     }
 
-    const instSkipped = raw.filter(t => isInst(t.name)).length;
+    const instCount = raw.filter(t => isInst(t.name)).length;
     const withVocal = raw.filter(t => !isInst(t.name));
 
-    const map = new Map();
-    let dupCount = 0;
+    const map = new Map(); let dupCount = 0;
     withVocal.forEach(t => {
       const key = normalizeTitle(t.name);
       if (!map.has(key)) { map.set(key, t); }
-      else {
-        dupCount++;
-        if ((t.releaseDate || '9999') < (map.get(key).releaseDate || '9999')) map.set(key, t);
-      }
+      else { dupCount++; if (t.releaseDate < (map.get(key).releaseDate || '9999')) map.set(key, t); }
     });
 
     filteredTracks = Array.from(map.values()).sort((a,b) => a.releaseDate.localeCompare(b.releaseDate));
-    renderTracks(filteredTracks, instSkipped, dupCount);
+    renderTracks(filteredTracks, instCount, dupCount);
   } catch(e) {
     sec.innerHTML = `<div class="msg err">取得失敗: ${e.message}</div>`;
   }
@@ -464,9 +370,7 @@ async function fetchAll(artistId) {
 
 /* ---- RENDER TRACKS ---- */
 function renderTracks(tracks, instCount, dupCount) {
-  const sec = document.getElementById('tracks-section');
-  const plName = selectedArtist.name + ' - All Tracks';
-  sec.innerHTML = `
+  document.getElementById('tracks-section').innerHTML = `
     <div class="label">Step 3 — プレイリスト作成</div>
     <div class="card">
       <div class="stats">
@@ -474,12 +378,10 @@ function renderTracks(tracks, instCount, dupCount) {
         <div class="stat"><div class="stat-num">${instCount}</div><div class="stat-lbl">インスト除外</div></div>
         <div class="stat"><div class="stat-num">${dupCount}</div><div class="stat-lbl">重複除外</div></div>
       </div>
-
       <div class="pl-name-row">
         <label>プレイリスト名</label>
-        <input type="text" id="playlist-name" value="${plName}" />
+        <input type="text" id="playlist-name" value="${selectedArtist.name} - All Tracks" />
       </div>
-
       <div class="label" style="margin-bottom:8px;">収録トラック（リリース順）</div>
       <div class="track-list">
         ${tracks.map((t,i) => `
@@ -491,17 +393,14 @@ function renderTracks(tracks, instCount, dupCount) {
               <div class="t-album">${t.albumName}</div>
             </div>
             <span class="t-date">${t.releaseDate.slice(0,7)}</span>
-          </div>
-        `).join('')}
+          </div>`).join('')}
       </div>
-
       <div class="action-row">
         <button class="btn" onclick="createPlaylist()">Spotify にプレイリスト作成</button>
-        <button class="btn-ghost" onclick="exportCSV()">CSV でエクスポート</button>
+        <button class="btn-ghost" onclick="exportCSV()">CSV エクスポート</button>
       </div>
       <div id="create-msg" class="msg"></div>
-    </div>
-  `;
+    </div>`;
 }
 
 /* ---- CREATE PLAYLIST ---- */
@@ -534,24 +433,19 @@ async function createPlaylist() {
   }
 }
 
-/* ---- CSV EXPORT ---- */
+/* ---- CSV ---- */
 function exportCSV() {
   const rows = [['#','曲名','アルバム','リリース日','URI']];
   filteredTracks.forEach((t,i) => rows.push([i+1, t.name, t.albumName, t.releaseDate, t.uri]));
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  a.href = URL.createObjectURL(new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'}));
   a.download = (selectedArtist?.name || 'tracklist') + '.csv';
   a.click();
 }
 
-/* ---- ENTER KEY ---- */
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter') {
-    if (document.activeElement.id === 'artist-input') searchArtists();
-    if (['client-id','redirect-uri'].includes(document.activeElement.id)) startAuth();
-  }
+  if (e.key === 'Enter' && document.activeElement.id === 'artist-input') searchArtists();
 });
 
 window.addEventListener('load', checkAuth);
