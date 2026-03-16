@@ -27,6 +27,18 @@ const APPS = [
     href:    "./apps/review/index.html",
     status:  "live",
   },
+  {
+    id:      "spotify-playlist",
+    name:    "Spotify-playlist",
+    desc:    "アーティスト毎にプレイリストを自動生成する",
+    emoji:   "🎶",
+    color:   "#91f040",
+    bgColor: "#13110a",
+    tags:    ["音楽"],
+    href:    "./apps/spotify-playlist/index.html",
+    status:  "live",
+  },
+  
 
   // ---- 追加例（コメントアウトを外すだけで表示される）----
   // {
