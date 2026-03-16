@@ -155,10 +155,29 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 56px;
-  background: var(--card-bg, var(--bg3));
+  background: var(--bg3);
   position: relative;
   overflow: hidden;
+}
+
+/* 画像バナー */
+.app-card-banner-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* デフォルト表示（頭文字） */
+.app-card-banner-default {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 72px;
+  line-height: 1;
+  color: var(--card-color, #f0c040);
+  opacity: 0.25;
+  position: relative;
+  z-index: 1;
+  user-select: none;
 }
 
 /* バナー内グロー */
@@ -166,8 +185,9 @@ body::before {
   content: '';
   position: absolute; inset: 0;
   background: radial-gradient(ellipse at center,
-    color-mix(in srgb, var(--card-color, #f0c040) 15%, transparent) 0%,
+    color-mix(in srgb, var(--card-color, #f0c040) 12%, transparent) 0%,
     transparent 70%);
+  pointer-events: none;
 }
 
 .app-card-body {
