@@ -347,6 +347,7 @@ async function fetchAllVideos(channelId, uploadsId) {
       const ids = allVideoIds.slice(i, i+50).join(',');
       const d = await ytGet(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${ids}&hl=ja&regionCode=JP`);
       d.items.forEach(v => videoDetailMap.set(v.id, v));
+      console.log(`videoDetailMap: ${videoDetailMap.size}件`);
     }
 
     // Step3: フィルター
@@ -356,11 +357,11 @@ async function fetchAllVideos(channelId, uploadsId) {
       return (parseInt(m[1]||0)*3600) + (parseInt(m[2]||0)*60) + parseInt(m[3]||0);
     }
     function isAvailableInJP(detail) {
-      if (!detail) return false;
+      if (!detail) return true; // 詳細不明は通す
       const r = detail.contentDetails?.regionRestriction;
       if (!r) return true; // 制限なし＝視聴可能
-      if (r.blocked && r.blocked.includes('JP')) return false;
-      if (r.allowed && !r.allowed.includes('JP')) return false;
+      if (r.blocked && r.blocked.includes('JP')) return false; // JPがブロックリストにある
+      if (r.allowed && r.allowed.length > 0 && !r.allowed.includes('JP')) return false; // JPが許可リストにない
       return true;
     }
 
