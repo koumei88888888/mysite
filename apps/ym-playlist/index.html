@@ -338,47 +338,94 @@ async function fetchAllVideos(channelId, uploadsId) {
       sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>${items.length} 件取得中...</div>`;
     } while (pageToken);
 
-    // Step2: playlistItemsのsnippetだけでフィルター（videos APIを使わない→クォータ節約）
-    let shortSkip = 0, instSkip = 0, liveSkip = 0;
+    // Step2: videos APIで視聴可否・duration取得（50件ずつ）
+    sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>動画の詳細情報を確認中 (0/${items.length})...</div>`;
+    const allVideoIds = items.map(it => it.snippet.resourceId?.videoId).filter(Boolean);
+    const videoDetailMap = new Map();
+    for (let i = 0; i < allVideoIds.length; i += 50) {
+      sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>動画の詳細情報を確認中 (${i}/${allVideoIds.length})...</div>`;
+      const ids = allVideoIds.slice(i, i+50).join(',');
+      const d = await ytGet(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${ids}&hl=ja&regionCode=JP`);
+      d.items.forEach(v => videoDetailMap.set(v.id, v));
+    }
 
-    function isShortOrLive(item) {
+    // Step3: フィルター
+    function parseDuration(iso) {
+      const m = (iso||'').match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+      if (!m) return 0;
+      return (parseInt(m[1]||0)*3600) + (parseInt(m[2]||0)*60) + parseInt(m[3]||0);
+    }
+    function isAvailableInJP(detail) {
+      if (!detail) return false;
+      const r = detail.contentDetails?.regionRestriction;
+      if (!r) return true; // 制限なし＝視聴可能
+      if (r.blocked && r.blocked.includes('JP')) return false;
+      if (r.allowed && !r.allowed.includes('JP')) return false;
+      return true;
+    }
+
+    let shortSkip = 0, instSkip = 0, liveSkip = 0, unavailSkip = 0;
+
+    function isShortOrLive(item, detail) {
       const title = item.snippet?.title || '';
-      const desc = item.snippet?.description || '';
-      // ライブアーカイブ：タイトルに含まれるキーワード
-      if (/ライブ|live|配信|stream|concert|tour|アーカイブ/i.test(title)) { liveSkip++; return true; }
-      // Shorts：タイトルまたは説明に #Shorts
-      if (/#shorts|#short/i.test(title + desc)) { shortSkip++; return true; }
+      const dur = parseDuration(detail?.contentDetails?.duration);
+      if (dur > 0 && dur <= 60) { shortSkip++; return true; }
+      if (/#shorts|#short/i.test(title)) { shortSkip++; return true; }
+      if (/ライブ|配信|stream|concert|tour|アーカイブ/i.test(title) && dur > 3600) { liveSkip++; return true; }
       return false;
     }
 
     const vocal = items.filter(v => {
+      const vid = v.snippet.resourceId?.videoId;
+      const detail = videoDetailMap.get(vid);
       const title = v.snippet?.title || '';
-      if (isShortOrLive(v)) return false;
+      if (!isAvailableInJP(detail)) { unavailSkip++; return false; }
+      if (isShortOrLive(v, detail)) return false;
       if (isInst(title)) { instSkip++; return false; }
       return true;
     });
 
-    // 重複除去
+    // Step4: 重複除去（視聴可能版を優先、同じなら早いリリース日を採用）
     const map = new Map(); let dupCount = 0;
     vocal.forEach(v => {
       const key = normalizeTitle(v.snippet.title);
       const date = v.snippet.publishedAt || '';
-      if (!map.has(key)) { map.set(key, v); }
-      else { dupCount++; if (date < (map.get(key).snippet.publishedAt||'')) map.set(key, v); }
+      const vid = v.snippet.resourceId?.videoId;
+      const avail = isAvailableInJP(videoDetailMap.get(vid));
+      if (!map.has(key)) {
+        map.set(key, { item: v, avail, date });
+      } else {
+        const cur = map.get(key);
+        dupCount++;
+        // 視聴可能版を優先、両方可能なら早い日付を採用
+        if (!cur.avail && avail) {
+          map.set(key, { item: v, avail, date });
+        } else if (cur.avail && !avail) {
+          // 現状維持
+        } else if (date < cur.date) {
+          map.set(key, { item: v, avail, date });
+        }
+      }
     });
 
     filteredVideos = Array.from(map.values())
+      .map(e => e.item)
       .sort((a,b) => (a.snippet.publishedAt||'').localeCompare(b.snippet.publishedAt||''));
 
     // 除外曲リストを保存
-    _skippedVideos = items.filter(v => isShortOrLive(v) || isInst(v.snippet?.title||''));
+    _skippedVideos = items.filter(v => {
+      const vid = v.snippet.resourceId?.videoId;
+      const detail = videoDetailMap.get(vid);
+      return !isAvailableInJP(detail) || isShortOrLive(v, detail) || isInst(v.snippet?.title||'');
+    });
 
     // 重複除外曲リストを保存
     _dupVideos = [];
     const adoptedIds = new Set(filteredVideos.map(v => v.snippet.resourceId?.videoId));
     vocal.forEach(v => { if (!adoptedIds.has(v.snippet.resourceId?.videoId)) _dupVideos.push(v); });
 
-    renderTracks(filteredVideos, instSkip + shortSkip + liveSkip, dupCount, shortSkip, liveSkip, instSkip);
+    const totalSkip = instSkip + shortSkip + liveSkip + unavailSkip;
+    renderTracks(filteredVideos, totalSkip, dupCount, shortSkip, liveSkip, instSkip);
   } catch(e) {
     sec.innerHTML = `<div class="msg err">取得失敗: ${e.message}</div>`;
   }
