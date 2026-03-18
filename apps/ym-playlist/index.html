@@ -310,10 +310,12 @@ function isInst(title) {
 }
 function normalizeTitle(title) {
   return title.toLowerCase()
-    .replace(/[\s\u3000]+/g, ' ')
-    .replace(/\(.*?\)|\[.*?\]|【.*?】|「.*?」/g, '')
+    .replace(/[\s\u3000]+/g, ' ')       // 全角スペース統一
+    .replace(/,\s*/g, ',')               // カンマ後スペース除去（"call me, tell me" → "call me,tell me"）
+    .replace(/\(.*?\)|\[.*?\]|【.*?】|「.*?」/g, '')  // 括弧除去
     .replace(/[-_]\s*(ver\.|version|remix|edit|remaster.*|MV|PV|Music Video|Official)/gi, '')
-    .replace(/(MV|PV|Music Video|Official Video|Official|OFFICIAL)/gi, '')
+    .replace(/\s*(MV|PV|Music Video|Official Video|Official|OFFICIAL)\s*/gi, '')
+    .replace(/\s+/g, ' ')               // 複数スペースを1つに
     .trim();
 }
 
