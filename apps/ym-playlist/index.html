@@ -391,29 +391,28 @@ async function fetchAllVideos(channelId, uploadsId) {
     _vocal = vocal; // デバッグ用
 
     // Step4: 重複除去（視聴可能版を優先、同じなら早いリリース日を採用）
-    const map = new Map(); let dupCount = 0;
+    const dedupMap = new Map(); let dupCount = 0;
     vocal.forEach(v => {
       const key = normalizeTitle(v.snippet.title);
       const date = v.snippet.publishedAt || '';
       const vid = v.snippet.resourceId?.videoId;
       const avail = isAvailableInJP(videoDetailMap.get(vid));
-      if (!map.has(key)) {
-        map.set(key, { item: v, avail, date });
+      if (!dedupMap.has(key)) {
+        dedupMap.set(key, { item: v, avail, date });
       } else {
-        const cur = map.get(key);
+        const cur = dedupMap.get(key);
         dupCount++;
-        // 視聴可能版を優先、両方可能なら早い日付を採用
         if (!cur.avail && avail) {
-          map.set(key, { item: v, avail, date });
+          dedupMap.set(key, { item: v, avail, date });
         } else if (cur.avail && !avail) {
           // 現状維持
         } else if (date < cur.date) {
-          map.set(key, { item: v, avail, date });
+          dedupMap.set(key, { item: v, avail, date });
         }
       }
     });
 
-    filteredVideos = Array.from(map.values())
+    filteredVideos = Array.from(dedupMap.values())
       .map(e => e.item)
       .sort((a,b) => (a.snippet.publishedAt||'').localeCompare(b.snippet.publishedAt||''));
 
