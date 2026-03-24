@@ -160,6 +160,7 @@ const SCOPES = 'https://www.googleapis.com/auth/youtube https://www.googleapis.c
 let accessToken = null;
 let selectedChannel = null;
 let filteredVideos = [];
+let _vocal = []; // デバッグ用グローバル
 
 /* ---- AUTH (Implicit Flow) ---- */
 function startAuth() {
@@ -387,6 +388,7 @@ async function fetchAllVideos(channelId, uploadsId) {
       if (isInst(title)) { instSkip++; return false; }
       return true;
     });
+    _vocal = vocal; // デバッグ用
 
     // Step4: 重複除去（視聴可能版を優先、同じなら早いリリース日を採用）
     const map = new Map(); let dupCount = 0;
