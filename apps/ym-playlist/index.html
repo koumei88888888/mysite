@@ -310,9 +310,11 @@ function isInst(title) {
   return /instrumental|off\s?vocal|カラオケ|インスト|\bInst\.?\b|\(inst\b|\[inst\b|offvocal/i.test(title);
 }
 function normalizeTitle(title) {
-  return title.toLowerCase()
+  return title
+    .normalize('NFC')                    // Unicode正規化（濁点の合成/分解を統一）
+    .toLowerCase()
     .replace(/[\s\u3000]+/g, ' ')       // 全角スペース統一
-    .replace(/,\s*/g, ',')               // カンマ後スペース除去（"call me, tell me" → "call me,tell me"）
+    .replace(/,\s*/g, ',')               // カンマ後スペース除去
     .replace(/\(.*?\)|\[.*?\]|【.*?】|「.*?」/g, '')  // 括弧除去
     .replace(/[-_]\s*(ver\.|version|remix|edit|remaster.*|MV|PV|Music Video|Official)/gi, '')
     .replace(/\s*(MV|PV|Music Video|Official Video|Official|OFFICIAL)\s*/gi, '')
