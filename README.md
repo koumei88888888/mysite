@@ -24,7 +24,8 @@
     │   ├── manga/index.html
     │   └── game/index.html
     │
-    └── （次のサービス）/       ← 新サービスはここに追加
+    └── ym-playlist/            ← プレイリストアプリ
+        └── index.html
 ```
 
 ---
