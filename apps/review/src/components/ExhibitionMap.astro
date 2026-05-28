@@ -1,0 +1,17 @@
+---
+interface Props {
+  subtitle: string; // 施設名（例: "国立科学博物館"）
+  address: string;
+}
+
+const { subtitle, address } = Astro.props;
+const src = `https://maps.google.com/maps?q=${encodeURIComponent(subtitle + ' ' + address)}&output=embed&zoom=16`;
+---
+
+<iframe
+  class="detail-map-iframe"
+  src={src}
+  title={`${subtitle} の地図`}
+  loading="lazy"
+  allowfullscreen
+></iframe>

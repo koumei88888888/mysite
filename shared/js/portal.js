@@ -24,7 +24,7 @@ const APPS = [
     image:  "",           // 例: "./apps/review/banner.png"
     color:  "#f0c040",
     tags:   ["漫画", "ゲーム", "レビュー"],
-    href:   "./apps/review/index.html",
+    href:   "./apps/review/",
     status: "live",
   },
   {

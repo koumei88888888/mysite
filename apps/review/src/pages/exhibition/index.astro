@@ -1,0 +1,178 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ExhibitionCard from '../../components/ExhibitionCard.astro';
+import { EXHIBITION_TYPES } from '../../config';
+
+const allEntries = (await getCollection('exhibition'))
+  .sort((a, b) => b.data.date.localeCompare(a.data.date));
+
+const prefectures = [...new Set(allEntries.map(e => e.data.prefecture))].sort();
+
+const clientData = allEntries.map(e => ({
+  slug:       e.slug,
+  title:      e.data.title,
+  subtitle:   e.data.subtitle,
+  type:       e.data.type,
+  prefecture: e.data.prefecture,
+  address:    e.data.address,
+  lat:        e.data.lat,
+  lng:        e.data.lng,
+  score:      e.data.score,
+  emoji:      EXHIBITION_TYPES.find(t => t.id === e.data.type)?.emoji ?? '🏛️',
+  color:      EXHIBITION_TYPES.find(t => t.id === e.data.type)?.color ?? '#888',
+}));
+
+const BASE_URL = import.meta.env.BASE_URL.replace(/([^/])$/, '$1/');
+---
+
+<BaseLayout title="展示" activeNav="exhibition">
+  <div class="page-header">
+    <p class="eyebrow">EXHIBITION</p>
+    <h1>展<span>示</span></h1>
+    <p class="desc">訪れた博物館・美術館・科学館などのレビュー。</p>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="filter-group">
+      <label for="f-type">種類</label>
+      <select id="f-type">
+        <option value="">すべて</option>
+        {EXHIBITION_TYPES.map(t => <option value={t.id}>{t.emoji} {t.label}</option>)}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="f-pref">都道府県</label>
+      <select id="f-pref">
+        <option value="">すべて</option>
+        {prefectures.map(p => <option value={p}>{p}</option>)}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="f-score">最低スコア</label>
+      <input type="range" id="f-score" min="1" max="5" step="0.5" value="1">
+      <span class="score-display" id="score-val">1.0</span>
+    </div>
+    <div class="spacer"></div>
+    <span class="count-badge"><strong id="count">{allEntries.length}</strong> 件</span>
+    <div class="view-toggle">
+      <button class="view-btn active" id="btn-card">カード</button>
+      <button class="view-btn"        id="btn-map">マップ</button>
+    </div>
+  </div>
+
+  <!-- Card view -->
+  <div class="card-grid" id="card-view">
+    {allEntries.map(e => (
+      <div class="ex-filter-item"
+           data-type={e.data.type}
+           data-pref={e.data.prefecture}
+           data-score={e.data.score}>
+        <ExhibitionCard slug={e.slug} {...e.data} />
+      </div>
+    ))}
+    <div class="empty-state" id="empty-state" style="display:none">
+      <div class="icon">🔍</div>
+      <p>条件に合う展示が見つかりませんでした。</p>
+    </div>
+  </div>
+
+  <!-- Map view -->
+  <div id="map-container" style="display:none"></div>
+</BaseLayout>
+
+<style>
+  .ex-filter-item { display: contents; }
+  .ex-filter-item.hidden { display: none; }
+</style>
+
+<script define:vars={{ clientData, BASE_URL }}>
+  const scoreInput = document.getElementById('f-score');
+  const scoreVal   = document.getElementById('score-val');
+  const countEl    = document.getElementById('count');
+  const emptyEl    = document.getElementById('empty-state');
+  const cardView   = document.getElementById('card-view');
+  const mapView    = document.getElementById('map-container');
+  const btnCard    = document.getElementById('btn-card');
+  const btnMap     = document.getElementById('btn-map');
+  const items      = [...document.querySelectorAll('.ex-filter-item')];
+
+  let leafletMap = null;
+
+  scoreInput.addEventListener('input', () => {
+    scoreVal.textContent = parseFloat(scoreInput.value).toFixed(1);
+    applyFilters();
+  });
+  document.getElementById('f-type').addEventListener('change', applyFilters);
+  document.getElementById('f-pref').addEventListener('change', applyFilters);
+
+  function applyFilters() {
+    const type  = document.getElementById('f-type').value;
+    const pref  = document.getElementById('f-pref').value;
+    const score = parseFloat(scoreInput.value);
+    let visible = 0;
+    items.forEach(item => {
+      const show = (!type  || item.dataset.type  === type)
+                && (!pref  || item.dataset.pref  === pref)
+                && parseFloat(item.dataset.score) >= score;
+      item.classList.toggle('hidden', !show);
+      if (show) visible++;
+    });
+    countEl.textContent   = visible;
+    emptyEl.style.display = visible === 0 ? 'block' : 'none';
+  }
+
+  btnCard.addEventListener('click', () => {
+    cardView.style.display = '';
+    mapView.style.display  = 'none';
+    btnCard.classList.add('active');
+    btnMap.classList.remove('active');
+  });
+
+  btnMap.addEventListener('click', () => {
+    cardView.style.display = 'none';
+    mapView.style.display  = '';
+    btnCard.classList.remove('active');
+    btnMap.classList.add('active');
+    if (!leafletMap) initMap();
+  });
+
+  function initMap() {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.onload = () => {
+      leafletMap = L.map('map-container').setView([36.5, 137], 5);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap contributors © CARTO',
+        maxZoom: 18,
+      }).addTo(leafletMap);
+
+      clientData.forEach(ex => {
+        const icon = L.divIcon({
+          html: `<div style="font-size:24px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.8));">${ex.emoji}</div>`,
+          className: '',
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
+        L.marker([ex.lat, ex.lng], { icon })
+          .addTo(leafletMap)
+          .bindPopup(`
+            <div style="min-width:160px;line-height:1.6;">
+              <div style="font-size:13px;font-weight:700;margin-bottom:2px;">
+                <a href="${BASE_URL}exhibition/${ex.slug}/" style="color:${ex.color};">${ex.title}</a>
+              </div>
+              <div style="font-size:11px;color:#9090b8;">${ex.subtitle}</div>
+              <div style="font-size:11px;color:#9090b8;">${ex.prefecture}</div>
+            </div>
+          `);
+      });
+    };
+    document.head.appendChild(script);
+  }
+</script>

@@ -1,0 +1,33 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ReviewCard from '../components/ReviewCard.astro';
+import ExhibitionCard from '../components/ExhibitionCard.astro';
+
+const mangas      = await getCollection('manga');
+const games       = await getCollection('game');
+const exhibitions = await getCollection('exhibition');
+
+const recent = [
+  ...mangas.map(e      => ({ kind: 'review'     as const, category: 'manga'      as const, slug: e.slug, ...e.data })),
+  ...games.map(e       => ({ kind: 'review'     as const, category: 'game'       as const, slug: e.slug, ...e.data })),
+  ...exhibitions.map(e => ({ kind: 'exhibition' as const, category: 'exhibition' as const, slug: e.slug, ...e.data })),
+].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 9);
+---
+
+<BaseLayout title="ReView" activeNav="home">
+  <div class="page-header">
+    <p class="eyebrow">PERSONAL REVIEW SITE</p>
+    <h1>Re<span>View</span></h1>
+    <p class="desc">漫画・ゲーム・展示の個人レビューサイト。</p>
+  </div>
+
+  <h2 class="section-title">📰 Recent</h2>
+  <div class="card-grid">
+    {recent.map(item =>
+      item.kind === 'exhibition'
+        ? <ExhibitionCard {...item} />
+        : <ReviewCard    {...item} />
+    )}
+  </div>
+</BaseLayout>

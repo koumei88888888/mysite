@@ -1,0 +1,22 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ReviewCard from '../../components/ReviewCard.astro';
+
+const entries = (await getCollection('game'))
+  .sort((a, b) => b.data.date.localeCompare(a.data.date));
+---
+
+<BaseLayout title="ゲーム" activeNav="game">
+  <div class="page-header">
+    <p class="eyebrow">GAME</p>
+    <h1>ゲー<span>ム</span></h1>
+    <p class="desc">プレイしたゲームの個人レビュー。</p>
+  </div>
+
+  <div class="card-grid">
+    {entries.map(e => (
+      <ReviewCard category="game" slug={e.slug} {...e.data} />
+    ))}
+  </div>
+</BaseLayout>

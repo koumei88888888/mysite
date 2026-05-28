@@ -1,0 +1,52 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { formatDate, starsHTML } from '../../utils';
+import { CATEGORIES, BASE } from '../../config';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('manga');
+  return entries.map(entry => ({ params: { slug: entry.slug }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+const d = entry.data;
+const cat = CATEGORIES.find(c => c.id === 'manga')!;
+const base = BASE;
+---
+
+<BaseLayout title={d.title} activeNav="manga">
+  <a class="detail-back" href={`${base}manga/`}>← 漫画一覧に戻る</a>
+
+  <div class="detail-cover-layout">
+    <img class="detail-cover-img" src={d.thumbnail} alt={d.title}>
+    <div class="detail-cover-meta">
+      <span class="card-category" style={`background:${cat.color}22;color:${cat.color}`}>
+        {cat.emoji} {cat.label}
+      </span>
+      <h1 class="detail-hero-title">{d.title}</h1>
+      <div class="detail-hero-venue">{d.subtitle}</div>
+
+      <div class="detail-score-bar detail-score-bar--compact">
+        <div class="detail-score-main">
+          <span class="score-num">{d.score.toFixed(1)}</span>
+          <span class="score-denom">/ 5.0</span>
+          <span class="card-stars" set:html={starsHTML(d.score)} />
+        </div>
+        <div class="detail-meta-list">
+          <span class="detail-meta-item">📅 {formatDate(d.date)}</span>
+        </div>
+      </div>
+
+      <div class="card-tags">
+        {d.tags.map(t => <span class="card-tag">{t}</span>)}
+      </div>
+    </div>
+  </div>
+
+  <div class="detail-section-label">Review</div>
+  <div class="prose">
+    <Content />
+  </div>
+</BaseLayout>

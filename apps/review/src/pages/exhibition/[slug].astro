@@ -1,0 +1,65 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ExhibitionMap from '../../components/ExhibitionMap.astro';
+import { formatDate, starsHTML } from '../../utils';
+import { EXHIBITION_TYPES, BASE } from '../../config';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('exhibition');
+  return entries.map(entry => ({ params: { slug: entry.slug }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+const d = entry.data;
+const typeConfig = EXHIBITION_TYPES.find(t => t.id === d.type) ?? { label: d.type, emoji: '🏛️', color: '#10b981' };
+const base = BASE;
+---
+
+<BaseLayout title={d.title} activeNav="exhibition">
+  <a class="detail-back" href={`${base}exhibition/`}>← 展示一覧に戻る</a>
+
+  <!-- Hero -->
+  <div class="detail-hero">
+    <img class="detail-hero-img" src={d.thumbnail} alt={d.title}>
+    <div class="detail-hero-overlay">
+      <span class="detail-hero-type"
+            style={`background:${typeConfig.color}33;color:${typeConfig.color};`}>
+        {typeConfig.emoji} {typeConfig.label}
+      </span>
+      <div class="detail-hero-title">{d.title}</div>
+      <div class="detail-hero-venue">{d.subtitle} &nbsp;·&nbsp; {d.prefecture}</div>
+    </div>
+  </div>
+
+  <!-- Score bar -->
+  <div class="detail-score-bar">
+    <div class="detail-score-main">
+      <span class="score-num">{d.score.toFixed(1)}</span>
+      <span class="score-denom">/ 5.0</span>
+      <span class="card-stars" set:html={starsHTML(d.score)} />
+    </div>
+    <div class="detail-meta-list">
+      <span class="detail-meta-item">📅 訪問日 &nbsp; {formatDate(d.date)}</span>
+      <span class="detail-meta-item">📍 {d.address}</span>
+    </div>
+  </div>
+
+  <!-- Review body -->
+  <div style="margin-bottom:48px;">
+    <div class="detail-section-label">Review</div>
+    <div class="prose">
+      <Content />
+    </div>
+    <div class="card-tags" style="margin-top:24px;">
+      {d.tags.map(t => <span class="card-tag">{t}</span>)}
+    </div>
+  </div>
+
+  <!-- Access map -->
+  <div>
+    <h2 class="section-title">📍 アクセス</h2>
+    <ExhibitionMap subtitle={d.subtitle} address={d.address} />
+  </div>
+</BaseLayout>

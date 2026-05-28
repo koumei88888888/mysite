@@ -1,0 +1,31 @@
+---
+import { SITE_TITLE, PORTAL_HREF, CATEGORIES, BASE } from '../config';
+
+interface Props {
+  active: string;
+}
+
+const { active } = Astro.props;
+const base = BASE;
+---
+
+<nav class="site-nav">
+  <div class="nav-inner">
+    <a class="nav-back" href={PORTAL_HREF}>← Portal</a>
+    <span class="nav-logo">{SITE_TITLE}</span>
+    <ul class="nav-tabs">
+      <li>
+        <a href={base} class={active === 'home' ? 'active' : ''}>
+          <span>🏠</span> HOME
+        </a>
+      </li>
+      {CATEGORIES.map(cat => (
+        <li>
+          <a href={`${base}${cat.id}/`} class={active === cat.id ? 'active' : ''}>
+            <span>{cat.emoji}</span> {cat.label}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </div>
+</nav>

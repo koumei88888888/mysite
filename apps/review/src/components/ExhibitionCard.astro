@@ -1,0 +1,52 @@
+---
+import { EXHIBITION_TYPES, BASE } from '../config';
+import { formatDate, starsHTML } from '../utils';
+
+interface Props {
+  title: string;
+  subtitle: string;
+  type: string;
+  prefecture: string;
+  address: string;
+  score: number;
+  date: string;
+  tags: string[];
+  thumbnail: string;
+  summary: string;
+  slug: string;
+}
+
+const { title, subtitle, type, prefecture, address, score, date, tags, thumbnail, summary, slug } = Astro.props;
+const typeConfig = EXHIBITION_TYPES.find(t => t.id === type) ?? { label: type, emoji: '🏟️', color: '#888' };
+const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+const base = BASE;
+---
+
+<div class="review-card ex-card">
+  <a class="ex-card-stretched-link" href={`${base}exhibition/${slug}/`} aria-label={title}></a>
+  <img class="card-thumb ex-thumb" src={thumbnail} alt={title} loading="lazy">
+  <div class="card-body">
+    <div class="card-meta">
+      <span class="card-category" style={`background:${typeConfig.color}22;color:${typeConfig.color}`}>
+        {typeConfig.emoji} {typeConfig.label}
+      </span>
+      <span class="card-date">{formatDate(date)}</span>
+    </div>
+    <div class="card-title">{title}</div>
+    <div class="ex-venue-row">
+      <span class="ex-venue">{subtitle}</span>
+      <span class="ex-pref">{prefecture}</span>
+    </div>
+    <p class="card-summary">{summary}</p>
+    <div class="card-tags">
+      {tags.map(t => <span class="card-tag">{t}</span>)}
+    </div>
+    <div class="card-footer">
+      <div class="card-score">
+        <span class="score-num">{score.toFixed(1)}</span>
+        <span class="score-denom">/ 5.0</span>
+      </div>
+      <a class="ex-map-btn" href={mapsUrl} target="_blank" rel="noopener">📍 地図</a>
+    </div>
+  </div>
+</div>

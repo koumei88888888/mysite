@@ -140,6 +140,7 @@ body::before {
   transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
   cursor: pointer; display: flex; flex-direction: column;
   animation: fadeUp 0.4s ease both;
+  color: inherit;
 }
 .review-card:hover {
   transform: translateY(-4px); box-shadow: var(--shadow);
@@ -199,6 +200,188 @@ body::before {
   from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ==============================
+   Review detail: cover layout (manga / game)
+============================== */
+.detail-cover-layout {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 28px;
+  margin-bottom: 40px;
+  align-items: start;
+}
+.detail-cover-img {
+  width: 100%; aspect-ratio: 5/7; object-fit: cover;
+  border-radius: var(--radius); border: 1px solid var(--border);
+}
+.detail-cover-meta { display: flex; flex-direction: column; gap: 14px; }
+.detail-score-bar--compact {
+  border-bottom: none; margin-bottom: 0; padding-bottom: 0; padding-top: 0;
+}
+@media (max-width: 540px) {
+  .detail-cover-layout { grid-template-columns: 1fr; }
+  .detail-cover-img { max-width: 160px; }
+}
+
+/* ==============================
+   Exhibition card
+============================== */
+.ex-card { position: relative; }
+.ex-card-stretched-link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--radius);
+}
+.ex-card .card-body { position: relative; }
+.ex-card .ex-map-btn { position: relative; z-index: 2; }
+.ex-thumb { aspect-ratio: 16/9 !important; }
+.ex-venue-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ex-venue { font-size: 12px; color: var(--muted); }
+.ex-pref {
+  font-size: 11px; padding: 2px 8px; border-radius: 20px;
+  background: var(--bg3); color: var(--muted); border: 1px solid var(--border);
+}
+.ex-map-btn {
+  font-size: 11px; padding: 4px 12px; border-radius: 20px;
+  border: 1px solid var(--border); color: var(--muted);
+  font-family: 'DM Mono', monospace; transition: all 0.2s;
+  white-space: nowrap;
+}
+.ex-map-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+
+/* ==============================
+   Detail page
+============================== */
+.detail-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-family: 'DM Mono', monospace;
+  color: var(--muted); border: 1px solid var(--border);
+  padding: 5px 14px; border-radius: 8px; margin-bottom: 28px;
+  transition: all 0.2s;
+}
+.detail-back:hover { color: var(--text); border-color: rgba(255,255,255,0.2); }
+
+.detail-hero {
+  position: relative; border-radius: var(--radius);
+  overflow: hidden; margin-bottom: 32px;
+}
+.detail-hero-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; }
+.detail-hero-overlay {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 60px 32px 32px;
+  background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, transparent 100%);
+}
+.detail-hero-type {
+  display: inline-block; font-size: 11px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  padding: 4px 12px; border-radius: 20px; margin-bottom: 12px;
+}
+.detail-hero-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(24px, 4vw, 48px);
+  letter-spacing: 1px; line-height: 1.1; color: #fff; margin-bottom: 8px;
+}
+.detail-hero-venue { font-size: 13px; color: rgba(255,255,255,0.65); }
+
+.detail-score-bar {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  padding: 20px 0; border-bottom: 1px solid var(--border); margin-bottom: 36px;
+}
+.detail-score-main { display: flex; align-items: baseline; gap: 6px; }
+.detail-score-main .score-num { font-size: 44px; }
+.detail-score-main .card-stars { font-size: 16px; }
+.detail-meta-list {
+  display: flex; flex-direction: column; gap: 4px; flex: 1;
+}
+.detail-meta-item {
+  font-size: 12px; color: var(--muted);
+  font-family: 'DM Mono', monospace;
+}
+
+.detail-section-label {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  letter-spacing: 2px; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 14px;
+}
+
+/* Markdown body styles */
+.prose p {
+  font-size: 15px; line-height: 1.9; color: var(--text);
+  margin-bottom: 24px;
+}
+.prose h2 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 22px; letter-spacing: 1px; color: var(--text);
+  margin: 40px 0 14px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.prose h3 {
+  font-size: 17px; font-weight: 700; color: var(--text);
+  margin: 32px 0 12px;
+}
+.prose img {
+  width: 100%; border-radius: var(--radius);
+  border: 1px solid var(--border); margin: 28px 0 6px;
+}
+.prose img + em {
+  display: block; text-align: center;
+  font-size: 12px; color: var(--muted); font-style: normal;
+  font-family: 'DM Mono', monospace; margin-bottom: 28px;
+}
+.prose ul, .prose ol {
+  padding-left: 1.5em; margin-bottom: 24px; color: var(--text);
+}
+.prose li { margin-bottom: 6px; line-height: 1.8; }
+.prose blockquote {
+  border-left: 3px solid var(--accent);
+  margin: 24px 0; padding: 12px 20px;
+  background: var(--bg2); border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--muted);
+}
+
+/* figure / figcaption for images with captions */
+.prose figure { margin: 28px 0; }
+.prose figure img { margin: 0 0 6px; }
+.prose figcaption {
+  text-align: center; font-size: 12px; color: var(--muted);
+  font-family: 'DM Mono', monospace;
+}
+
+.detail-map-iframe {
+  width: 100%; height: 420px;
+  border-radius: var(--radius); border: 1px solid var(--border);
+  display: block; margin-bottom: 16px;
+}
+
+/* ==============================
+   View toggle (card / map)
+============================== */
+.view-toggle { display: flex; gap: 4px; }
+.view-btn {
+  font-size: 12px; padding: 5px 14px; border-radius: 8px;
+  border: 1px solid var(--border); color: var(--muted);
+  background: transparent; cursor: pointer;
+  font-family: 'DM Mono', monospace; transition: all 0.2s;
+}
+.view-btn.active { color: var(--text); background: var(--bg3); border-color: rgba(255,255,255,0.15); }
+.view-btn:hover:not(.active) { color: var(--text); }
+
+/* ==============================
+   Leaflet map container
+============================== */
+#map-container {
+  height: 580px; border-radius: var(--radius);
+  border: 1px solid var(--border); overflow: hidden;
+}
+.leaflet-popup-content-wrapper {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  color: var(--text);
+}
+.leaflet-popup-tip { background: var(--bg2); }
+.leaflet-popup-content { margin: 14px 16px; }
 
 /* Responsive */
 @media (max-width: 640px) {

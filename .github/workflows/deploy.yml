@@ -1,0 +1,64 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: apps/review
+        run: npm install
+
+      - name: Build Astro
+        working-directory: apps/review
+        run: npm run build
+
+      - name: Prepare site artifact
+        run: |
+          mkdir -p _site/apps/review
+          # Copy portal and other top-level files
+          cp index.html _site/
+          # Copy other app directories (skip review source — we use the build output)
+          for d in apps/*/; do
+            [ "$d" = "apps/review/" ] && continue
+            cp -r "$d" "_site/$d"
+          done
+          # Copy Astro build output to apps/review/
+          cp -r apps/review/dist/. _site/apps/review/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,29 @@
+---
+import SiteNav from '../components/SiteNav.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  activeNav?: string;
+}
+
+const { title, activeNav = 'home' } = Astro.props;
+---
+
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{title} — ReView</title>
+  <slot name="head" />
+</head>
+<body>
+  <SiteNav active={activeNav} />
+  <main class="page">
+    <slot />
+  </main>
+  <SiteFooter />
+</body>
+</html>

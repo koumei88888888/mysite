@@ -19,10 +19,11 @@
     │   ├── index.html
     │   ├── css/style.css
     │   ├── js/
-    │   │   ├── data.js         ← ★ レビューデータ・カテゴリ設定
+    │   │   ├── data.js         ← ★ レビューデータ・カテゴリ設定（REVIEWS / EXHIBITIONS）
     │   │   └── utils.js
     │   ├── manga/index.html
-    │   └── game/index.html
+    │   ├── game/index.html
+    │   └── exhibition/index.html  ← 展示レビュー（フィルタ＋マップ表示）
     │
     └── ym-playlist/            ← プレイリストアプリ
         └── index.html

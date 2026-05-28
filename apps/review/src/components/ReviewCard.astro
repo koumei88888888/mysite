@@ -1,0 +1,45 @@
+---
+import { CATEGORIES, BASE } from '../config';
+import { formatDate, starsHTML } from '../utils';
+
+interface Props {
+  title: string;
+  subtitle: string;
+  score: number;
+  date: string;
+  tags: string[];
+  thumbnail: string;
+  summary: string;
+  category: string;
+  slug: string;
+}
+
+const { title, subtitle, score, date, tags, thumbnail, summary, category, slug } = Astro.props;
+const cat = CATEGORIES.find(c => c.id === category) ?? { label: category, emoji: '📄', color: '#888' };
+const base = BASE;
+---
+
+<a class="review-card" href={`${base}${category}/${slug}/`}>
+  <img class="card-thumb" src={thumbnail} alt={title} loading="lazy">
+  <div class="card-body">
+    <div class="card-meta">
+      <span class="card-category" style={`background:${cat.color}22;color:${cat.color}`}>
+        {cat.emoji} {cat.label}
+      </span>
+      <span class="card-date">{formatDate(date)}</span>
+    </div>
+    <div class="card-title">{title}</div>
+    <div class="card-subtitle">{subtitle}</div>
+    <p class="card-summary">{summary}</p>
+    <div class="card-tags">
+      {tags.map(t => <span class="card-tag">{t}</span>)}
+    </div>
+    <div class="card-footer">
+      <div class="card-score">
+        <span class="score-num">{score.toFixed(1)}</span>
+        <span class="score-denom">/ 5.0</span>
+      </div>
+      <div class="card-stars" set:html={starsHTML(score)} />
+    </div>
+  </div>
+</a>

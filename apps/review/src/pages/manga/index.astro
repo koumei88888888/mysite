@@ -1,0 +1,22 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ReviewCard from '../../components/ReviewCard.astro';
+
+const entries = (await getCollection('manga'))
+  .sort((a, b) => b.data.date.localeCompare(a.data.date));
+---
+
+<BaseLayout title="漫画" activeNav="manga">
+  <div class="page-header">
+    <p class="eyebrow">MANGA</p>
+    <h1>漫<span>画</span></h1>
+    <p class="desc">読んだ漫画の個人レビュー。</p>
+  </div>
+
+  <div class="card-grid">
+    {entries.map(e => (
+      <ReviewCard category="manga" slug={e.slug} {...e.data} />
+    ))}
+  </div>
+</BaseLayout>
