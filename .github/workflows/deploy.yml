@@ -37,8 +37,10 @@ jobs:
       - name: Prepare site artifact
         run: |
           mkdir -p _site/apps/review
-          # Copy portal and other top-level files
+          # Copy portal
           cp index.html _site/
+          # Copy shared assets (portal.css / portal.js など)
+          cp -r shared _site/shared
           # Copy other app directories (skip review source — we use the build output)
           for d in apps/*/; do
             [ "$d" = "apps/review/" ] && continue
