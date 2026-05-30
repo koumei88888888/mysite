@@ -11,18 +11,18 @@ const base = BASE;
 
 <nav class="site-nav">
   <div class="nav-inner">
-    <a class="nav-back" href={PORTAL_HREF}>← Portal</a>
+    <a class="nav-back" href={PORTAL_HREF}>←<span class="nav-label"> Portal</span></a>
     <span class="nav-logo">{SITE_TITLE}</span>
     <ul class="nav-tabs">
       <li>
         <a href={base} class={active === 'home' ? 'active' : ''}>
-          <span>🏠</span> HOME
+          <span>🏠</span><span class="nav-label"> HOME</span>
         </a>
       </li>
       {CATEGORIES.map(cat => (
         <li>
           <a href={`${base}${cat.id}/`} class={active === cat.id ? 'active' : ''}>
-            <span>{cat.emoji}</span> {cat.label}
+            <span>{cat.emoji}</span><span class="nav-label"> {cat.label}</span>
           </a>
         </li>
       ))}

@@ -388,11 +388,35 @@ body::before {
 .leaflet-popup-tip { background: var(--bg2); }
 .leaflet-popup-content { margin: 14px 16px; }
 
-/* Responsive */
+/* ==============================
+   Responsive
+============================== */
+
+/* タブレット以下: ナビのラベルを非表示にして絵文字のみ */
 @media (max-width: 640px) {
-  .nav-inner { padding: 0 16px; }
-  .nav-logo { font-size: 20px; }
-  .nav-tabs a { padding: 5px 8px; font-size: 12px; }
-  .page { padding: 28px 16px 60px; }
+  .nav-label { display: none; }
+  .nav-inner { padding: 0 10px; gap: 4px; height: 54px; }
+  .nav-logo { font-size: 18px; margin-right: 4px; }
+  .nav-back { padding: 4px 8px; margin-right: 2px; font-size: 13px; }
+  .nav-tabs { gap: 0; }
+  .nav-tabs a { padding: 6px 7px; font-size: 18px; gap: 0; }
+
+  .page { padding: 24px 14px 60px; }
   .controls { gap: 8px; padding: 12px 14px; }
+
+  /* カードグリッド: 最低 2 列を保証 */
+  .card-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .card-body { padding: 10px 10px 12px; gap: 6px; }
+  .card-title { font-size: 13px; }
+  .card-subtitle { font-size: 11px; }
+  .card-summary { font-size: 12px; -webkit-line-clamp: 2; }
+  .card-tags { gap: 3px; }
+  .card-tag { font-size: 10px; padding: 1px 6px; }
+  .score-num { font-size: 22px; }
+  .card-stars { font-size: 11px; }
+  .card-date { font-size: 10px; }
+  .card-category { font-size: 10px; padding: 2px 7px; }
 }
