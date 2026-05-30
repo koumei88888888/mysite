@@ -13,9 +13,10 @@ interface Props {
   category: string;
   slug: string;
   platform?: string;
+  label?: string;
 }
 
-const { title, subtitle, score, date, tags, thumbnail, summary, category, slug, platform } = Astro.props;
+const { title, subtitle, score, date, tags, thumbnail, summary, category, slug, platform, label } = Astro.props;
 const cat = CATEGORIES.find(c => c.id === category) ?? { label: category, emoji: '📄', color: '#888' };
 const base = BASE;
 ---
@@ -33,6 +34,7 @@ const base = BASE;
     <div class="card-subtitle">
       {subtitle}
       {platform && <span class="platform-badge">🎮 {platform}</span>}
+      {label    && <span class="platform-badge">📖 {label}</span>}
     </div>
     <p class="card-summary">{summary}</p>
     <div class="card-tags">

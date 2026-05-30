@@ -9,6 +9,7 @@ const reviewSchema = z.object({
   thumbnail: z.string(),
   summary:   z.string(),
   platform:  z.string().optional(), // game のみ使用
+  label:     z.string().optional(), // manga のみ使用
 });
 
 const exhibitionSchema = z.object({
