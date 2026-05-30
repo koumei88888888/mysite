@@ -2,7 +2,9 @@ export const SITE_TITLE = 'ReView';
 
 // Always ends with '/'
 export const BASE = import.meta.env.BASE_URL.replace(/([^/])$/, '$1/');
-export const PORTAL_HREF = '/mysite/';
+// dev: Live Server が 5500 でポータルを配信している前提
+// prod: GitHub Pages の /mysite/
+export const PORTAL_HREF = import.meta.env.DEV ? 'http://127.0.0.1:5500/' : '/mysite/';
 
 export const CATEGORIES = [
   { id: 'manga',      label: '漫画',   emoji: '📚', color: '#e84393' },
