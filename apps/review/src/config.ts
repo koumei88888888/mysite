@@ -10,6 +10,12 @@ export const CATEGORIES = [
   { id: 'manga',      label: '漫画',   emoji: '📚', color: '#e84393' },
   { id: 'game',       label: 'ゲーム', emoji: '🎮', color: '#7c3aed' },
   { id: 'exhibition', label: '展示',   emoji: '🏛️', color: '#10b981' },
+  { id: 'movie',      label: '映画',   emoji: '🎬', color: '#ef4444' },
+] as const;
+
+export const MOVIE_TYPES = [
+  { id: '実写',   label: '実写',   emoji: '🎥', color: '#3b82f6' },
+  { id: 'アニメ', label: 'アニメ', emoji: '✨', color: '#f59e0b' },
 ] as const;
 
 export const EXHIBITION_TYPES = [

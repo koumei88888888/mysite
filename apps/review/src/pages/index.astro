@@ -3,15 +3,18 @@ import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ReviewCard from '../components/ReviewCard.astro';
 import ExhibitionCard from '../components/ExhibitionCard.astro';
+import MovieCard from '../components/MovieCard.astro';
 
 const mangas      = await getCollection('manga');
 const games       = await getCollection('game');
 const exhibitions = await getCollection('exhibition');
+const movies      = await getCollection('movie');
 
 const recent = [
   ...mangas.map(e      => ({ kind: 'review'     as const, category: 'manga'      as const, slug: e.slug, ...e.data })),
   ...games.map(e       => ({ kind: 'review'     as const, category: 'game'       as const, slug: e.slug, ...e.data })),
   ...exhibitions.map(e => ({ kind: 'exhibition' as const, category: 'exhibition' as const, slug: e.slug, ...e.data })),
+  ...movies.map(e      => ({ kind: 'movie'      as const, category: 'movie'      as const, slug: e.slug, ...e.data })),
 ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 9);
 ---
 
@@ -27,7 +30,9 @@ const recent = [
     {recent.map(item =>
       item.kind === 'exhibition'
         ? <ExhibitionCard {...item} />
-        : <ReviewCard    {...item} />
+        : item.kind === 'movie'
+        ? <MovieCard      {...item} />
+        : <ReviewCard     {...item} />
     )}
   </div>
 </BaseLayout>

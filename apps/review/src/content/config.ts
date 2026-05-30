@@ -27,8 +27,22 @@ const exhibitionSchema = z.object({
   summary:    z.string(),
 });
 
+const movieSchema = z.object({
+  title:     z.string(),
+  director:  z.string(),
+  year:      z.number(),
+  country:   z.string(),
+  type:      z.enum(['実写', 'アニメ']),
+  score:     z.number().min(1).max(5),
+  date:      z.string(),
+  tags:      z.array(z.string()),
+  thumbnail: z.string(),
+  summary:   z.string(),
+});
+
 export const collections = {
   manga:      defineCollection({ type: 'content', schema: reviewSchema }),
   game:       defineCollection({ type: 'content', schema: reviewSchema }),
   exhibition: defineCollection({ type: 'content', schema: exhibitionSchema }),
+  movie:      defineCollection({ type: 'content', schema: movieSchema }),
 };
