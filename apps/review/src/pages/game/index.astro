@@ -5,6 +5,8 @@ import ReviewCard from '../../components/ReviewCard.astro';
 
 const entries = (await getCollection('game'))
   .sort((a, b) => b.data.date.localeCompare(a.data.date));
+
+const platforms = [...new Set(entries.map(e => e.data.platform).filter(Boolean))].sort() as string[];
 ---
 
 <BaseLayout title="ゲーム" activeNav="game">
@@ -14,9 +16,67 @@ const entries = (await getCollection('game'))
     <p class="desc">プレイしたゲームの個人レビュー。</p>
   </div>
 
-  <div class="card-grid">
+  <div class="controls">
+    <div class="filter-group">
+      <label for="f-platform">プラットフォーム</label>
+      <select id="f-platform">
+        <option value="">すべて</option>
+        {platforms.map(p => <option value={p}>{p}</option>)}
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="f-score">最低スコア</label>
+      <input type="range" id="f-score" min="1" max="5" step="0.5" value="1">
+      <span class="score-display" id="score-val">1.0</span>
+    </div>
+    <div class="spacer"></div>
+    <span class="count-badge"><strong id="count">{entries.length}</strong> 件</span>
+  </div>
+
+  <div class="card-grid" id="card-view">
     {entries.map(e => (
-      <ReviewCard category="game" slug={e.slug} {...e.data} />
+      <div class="filter-item"
+           data-platform={e.data.platform ?? ''}
+           data-score={e.data.score}>
+        <ReviewCard category="game" slug={e.slug} {...e.data} />
+      </div>
     ))}
+    <div class="empty-state" id="empty-state" style="display:none">
+      <div class="icon">🔍</div>
+      <p>条件に合うゲームが見つかりませんでした。</p>
+    </div>
   </div>
 </BaseLayout>
+
+<style>
+  .filter-item { display: contents; }
+  .filter-item.hidden { display: none; }
+</style>
+
+<script>
+  const scoreInput = document.getElementById('f-score') as HTMLInputElement;
+  const scoreVal   = document.getElementById('score-val')!;
+  const countEl    = document.getElementById('count')!;
+  const emptyEl    = document.getElementById('empty-state')!;
+  const items      = [...document.querySelectorAll<HTMLElement>('.filter-item')];
+
+  scoreInput.addEventListener('input', () => {
+    scoreVal.textContent = parseFloat(scoreInput.value).toFixed(1);
+    applyFilters();
+  });
+  document.getElementById('f-platform')!.addEventListener('change', applyFilters);
+
+  function applyFilters() {
+    const platform = (document.getElementById('f-platform') as HTMLSelectElement).value;
+    const minScore = parseFloat(scoreInput.value);
+    let visible = 0;
+    items.forEach(item => {
+      const show = (!platform || item.dataset.platform === platform)
+                && parseFloat(item.dataset.score!) >= minScore;
+      item.classList.toggle('hidden', !show);
+      if (show) visible++;
+    });
+    countEl.textContent   = String(visible);
+    emptyEl.style.display = visible === 0 ? 'block' : 'none';
+  }
+</script>

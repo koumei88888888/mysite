@@ -12,9 +12,10 @@ interface Props {
   summary: string;
   category: string;
   slug: string;
+  platform?: string;
 }
 
-const { title, subtitle, score, date, tags, thumbnail, summary, category, slug } = Astro.props;
+const { title, subtitle, score, date, tags, thumbnail, summary, category, slug, platform } = Astro.props;
 const cat = CATEGORIES.find(c => c.id === category) ?? { label: category, emoji: '📄', color: '#888' };
 const base = BASE;
 ---
@@ -29,7 +30,10 @@ const base = BASE;
       <span class="card-date">{formatDate(date)}</span>
     </div>
     <div class="card-title">{title}</div>
-    <div class="card-subtitle">{subtitle}</div>
+    <div class="card-subtitle">
+      {subtitle}
+      {platform && <span class="platform-badge">🎮 {platform}</span>}
+    </div>
     <p class="card-summary">{summary}</p>
     <div class="card-tags">
       {tags.map(t => <span class="card-tag">{t}</span>)}
