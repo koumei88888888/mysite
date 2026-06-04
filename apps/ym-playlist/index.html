@@ -17,7 +17,9 @@
   body { background: var(--bg); color: var(--text); font-family: var(--font-display); min-height: 100vh; }
   .shell { max-width: 760px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
 
-  header { display: flex; align-items: center; gap: 14px; margin-bottom: 3rem; }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 3rem; flex-wrap: wrap; }
+  .portal-back { font-family: var(--font-mono); font-size: 11px; color: var(--muted); border: 1px solid var(--border2); border-radius: 999px; padding: 5px 13px; text-decoration: none; transition: color 0.15s, border-color 0.15s; white-space: nowrap; margin-left: auto; }
+  .portal-back:hover { color: var(--text); border-color: var(--red); }
   .logo-mark { width: 44px; height: 44px; background: var(--red); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .logo-mark svg { width: 22px; height: 22px; fill: white; }
   .header-text h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
@@ -115,6 +117,7 @@
       <h1>YouTube Music 全曲プレイリストジェネレーター</h1>
       <p>インスト・off vocal・重複を自動除外してプレイリストに保存</p>
     </div>
+    <a class="portal-back" href="../../">← Portal</a>
   </header>
 
 
