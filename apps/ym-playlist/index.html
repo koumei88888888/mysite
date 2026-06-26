@@ -393,6 +393,12 @@ async function fetchAllVideos(channelId, uploadsId) {
 
       // Step5: リリース日（古い順）でプレイリストをソート
       playlistData.sort((a, b) => a.releaseDate.localeCompare(b.releaseDate));
+      console.log('[ym-playlist] playlist sort order:', playlistData.map(p => ({
+        title: p.plItems[0]?.snippet?.videoOwnerChannelTitle || p.plItems[0]?.snippet?.channelTitle || '?',
+        releaseDate: p.releaseDate,
+        tracks: p.plItems.length,
+        firstTrack: p.plItems[0]?.snippet?.title
+      })));
 
       // Step6: ソート済みプレイリスト順に楽曲を収集（重複動画IDはスキップ）、プレイリストのリリース日を添付
       const seenVideoIds = new Set();
@@ -493,8 +499,9 @@ async function fetchAllVideos(channelId, uploadsId) {
       }
     });
 
-    // Map挿入順（＝プレイリスト古い順 × トラック位置順）を維持
     filteredVideos = Array.from(dedupMap.values()).map(e => e.item);
+    // 重複除去でMap挿入順が乱れる（古いバージョンに差し替えてもMap内の位置は変わらない）ため、最後に_releaseDateで再ソート
+    filteredVideos.sort((a, b) => (a._releaseDate || '').localeCompare(b._releaseDate || ''));
 
     // 除外曲リストを保存
     _skippedVideos = items.filter(v => {
