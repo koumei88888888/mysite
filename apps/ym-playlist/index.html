@@ -500,8 +500,8 @@ async function fetchAllVideos(channelId, uploadsId) {
     });
 
     filteredVideos = Array.from(dedupMap.values()).map(e => e.item);
-    // 重複除去でMap挿入順が乱れる（古いバージョンに差し替えてもMap内の位置は変わらない）ため、最後に_releaseDateで再ソート
-    filteredVideos.sort((a, b) => (a._releaseDate || '').localeCompare(b._releaseDate || ''));
+    // snippet.publishedAt（Art Trackの実際の公開日）で最終ソート。CSVの「投稿日」と同じ値
+    filteredVideos.sort((a, b) => (a.snippet.publishedAt || '').localeCompare(b.snippet.publishedAt || ''));
 
     // 除外曲リストを保存
     _skippedVideos = items.filter(v => {
@@ -622,8 +622,7 @@ async function createPlaylist() {
 function renderTrackItem(v, num) {
   const s = v.snippet;
   const thumb = s.thumbnails?.medium?.url || s.thumbnails?.default?.url;
-  // _releaseDate: プレイリスト（シングル/アルバム）のリリース日。なければ動画の公開日にフォールバック
-  const date = v._releaseDate || (s.publishedAt||'').slice(0,10);
+  const date = (s.publishedAt||'').slice(0,10);
   return `<div class="track-item">
     <span class="t-num">${num}</span>
     ${thumb ? `<img class="t-thumb" src="${thumb}" />` : '<div class="t-thumb-ph"></div>'}
