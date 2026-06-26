@@ -450,7 +450,8 @@ async function fetchAllVideos(channelId, uploadsId) {
     });
     _vocal = vocal;
 
-    // Step5: タイトル正規化による重複除去（視聴可能版を優先、同じなら先に出現した方を採用）
+    // Step5: タイトル正規化による重複除去
+    // 優先順位: 1) 視聴可能 > 視聴不可、2) publishedAt が古い方（古いリリースを保持、新しい方を除外）
     const dedupMap = new Map(); let dupCount = 0;
     vocal.forEach(v => {
       const key = normalizeTitle(v.snippet.title);
@@ -462,10 +463,10 @@ async function fetchAllVideos(channelId, uploadsId) {
       } else {
         const cur = dedupMap.get(key);
         dupCount++;
-        if (!cur.avail && avail) {
-          dedupMap.set(key, { item: v, avail, date });
-        }
-        // 同じ可否なら先に出現した方（古い順）を維持
+        const replace =
+          (!cur.avail && avail) ||                  // 不可→可: 視聴可能版を優先
+          (cur.avail === avail && date < cur.date); // 同じ可否: publishedAt が古い方を確実に保持
+        if (replace) dedupMap.set(key, { item: v, avail, date });
       }
     });
 
