@@ -340,22 +340,40 @@ async function fetchAllVideos(channelId, uploadsId) {
       sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>アルバム/シングル一覧を取得中... ${playlists.length}件</div>`;
     } while (plPageToken);
 
-    // Step1b: search APIで補完（playlists APIが返さないアルバムプレイリストを補足）
+    // Step1b: YouTube Music innertube APIでOLAK5uy_アルバムプレイリストIDを探す
+    // playlists/search APIはトピックチャンネルのOLAK5uy_を返さないため補完
     {
       const existingPlIds = new Set(playlists.map(p => p.id));
-      let searchPlToken = '';
-      do {
-        const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=playlist&maxResults=50${searchPlToken ? '&pageToken='+searchPlToken : ''}`;
-        const d = await ytGet(url);
-        for (const item of (d.items || [])) {
-          const plId = item.id?.playlistId;
-          if (plId && !existingPlIds.has(plId)) {
-            existingPlIds.add(plId);
-            playlists.push({ id: plId, snippet: item.snippet });
-          }
+      const olakIds = new Set();
+      try {
+        sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>YouTube Musicからアルバム情報を取得中...</div>`;
+        const r = await fetch('https://music.youtube.com/youtubei/v1/browse?prettyPrint=false', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            browseId: channelId,
+            context: { client: { clientName: 'WEB_REMIX', clientVersion: '1.20240101.01.00', hl: 'ja', gl: 'JP' } }
+          })
+        });
+        if (r.ok) {
+          const findOlak = obj => {
+            if (!obj) return;
+            if (typeof obj === 'string') { if (obj.startsWith('OLAK5uy_')) olakIds.add(obj); return; }
+            if (Array.isArray(obj)) { obj.forEach(findOlak); return; }
+            if (typeof obj === 'object') Object.values(obj).forEach(findOlak);
+          };
+          findOlak(await r.json());
+          console.log('[ym-playlist] innertube OLAK5uy_ found:', [...olakIds]);
         }
-        searchPlToken = d.nextPageToken || '';
-      } while (searchPlToken);
+      } catch(e) { console.log('[ym-playlist] innertube failed (CORS?):', e.message); }
+
+      // 発見したOLAK5uy_ IDをData APIで取得してplaylistsに追加
+      const newOlaks = [...olakIds].filter(id => !existingPlIds.has(id));
+      for (let i = 0; i < newOlaks.length; i += 50) {
+        const ids = newOlaks.slice(i, i+50).join(',');
+        const d = await ytGet(`https://www.googleapis.com/youtube/v3/playlists?part=snippet&id=${ids}`);
+        (d.items || []).forEach(pl => { if (!existingPlIds.has(pl.id)) { existingPlIds.add(pl.id); playlists.push(pl); } });
+      }
     }
     console.log('[ym-playlist] Step1: playlists found:', playlists.length, playlists.map(p => p.id + ' ' + p.snippet?.title));
 
