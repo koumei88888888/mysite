@@ -373,34 +373,32 @@ async function fetchAllVideos(channelId, uploadsId) {
         d.items.forEach(v => videoDetailMap.set(v.id, v));
       }
 
-      // Step4: 各プレイリストのリリース日 = 収録動画の実際の公開日の最大値
-      // 最大値を使う理由: 古い曲を含む場合でも、最新トラックの日付がそのリリースの発売日に近い
+      // Step4: 各プレイリストのリリース日（最大値）と最小値を計算
       const playlistData = rawPlaylistData.map(({ pl, plItems }) => {
-        let releaseDate = '';
+        let maxDate = '', minDate = '';
         for (const item of plItems) {
           const vid = item.snippet.resourceId?.videoId;
-          // videoDetail.snippet.publishedAt = Art Track の実際の公開日（最も正確）
-          // なければ playlistItem.snippet.publishedAt にフォールバック
-          const d = videoDetailMap.get(vid)?.snippet?.publishedAt
-                 || item.snippet.publishedAt
-                 || '';
-          if (d > releaseDate) releaseDate = d;
+          const d = videoDetailMap.get(vid)?.snippet?.publishedAt || item.snippet.publishedAt || '';
+          if (d && (d > maxDate || !maxDate)) maxDate = d;
+          if (d && (d < minDate || !minDate)) minDate = d;
         }
-        // それでも取れない場合はプレイリスト自身の作成日にフォールバック
-        if (!releaseDate) releaseDate = pl.snippet.publishedAt || '';
-        return { plItems, releaseDate };
+        const releaseDate = maxDate || pl.snippet.publishedAt || '';
+        const minDate2 = minDate || releaseDate;
+        return { plItems, releaseDate, minDate: minDate2 };
       });
 
       // Step5: リリース日（古い順）でプレイリストをソート
-      // 同日の場合はトラック数が多い方（アルバム）を先に処理してアルバム内順番を保持
+      // 同日の場合: minDate が小さいもの（古い曲を含む=アルバム）を先に処理して曲順を保持
       playlistData.sort((a, b) => {
         const cmp = a.releaseDate.localeCompare(b.releaseDate);
         if (cmp !== 0) return cmp;
-        return b.plItems.length - a.plItems.length;
+        const minCmp = a.minDate.localeCompare(b.minDate);
+        if (minCmp !== 0) return minCmp;
+        return b.plItems.length - a.plItems.length; // 同minDate: トラック数多い順
       });
       console.log('[ym-playlist] playlist sort order:', playlistData.map(p => ({
-        title: p.plItems[0]?.snippet?.videoOwnerChannelTitle || p.plItems[0]?.snippet?.channelTitle || '?',
         releaseDate: p.releaseDate,
+        minDate: p.minDate,
         tracks: p.plItems.length,
         firstTrack: p.plItems[0]?.snippet?.title
       })));
@@ -412,9 +410,8 @@ async function fetchAllVideos(channelId, uploadsId) {
           const vid = item.snippet.resourceId?.videoId;
           if (vid && !seenVideoIds.has(vid)) {
             seenVideoIds.add(vid);
-            // _releaseDate: プレイリスト(シングル/アルバム)のリリース日
-            // 空の場合は個別動画の公開日にフォールバック（releaseDate が取れなかった場合の保険）
             item._releaseDate = (releaseDate || item.snippet.publishedAt || '').slice(0, 10);
+            item._firstPosition = item.snippet.position ?? 0; // アルバム優先処理時のアルバム内ポジション
             items.push(item);
           }
         }
@@ -505,8 +502,13 @@ async function fetchAllVideos(channelId, uploadsId) {
     });
 
     filteredVideos = Array.from(dedupMap.values()).map(e => e.item);
-    // snippet.publishedAt の日付部分（YYYY-MM-DD）でソート。時刻まで比較するとアルバム内順番が崩れる
-    filteredVideos.sort((a, b) => (a.snippet.publishedAt || '').slice(0, 10).localeCompare((b.snippet.publishedAt || '').slice(0, 10)));
+    // 1次: snippet.publishedAt の日付部分（YYYY-MM-DD）、2次: アルバム内ポジション
+    filteredVideos.sort((a, b) => {
+      const da = (a.snippet.publishedAt || '').slice(0, 10);
+      const db = (b.snippet.publishedAt || '').slice(0, 10);
+      if (da !== db) return da.localeCompare(db);
+      return (a._firstPosition ?? 0) - (b._firstPosition ?? 0);
+    });
 
     // 除外曲リストを保存
     _skippedVideos = items.filter(v => {
