@@ -358,11 +358,13 @@ async function fetchAllVideos(channelId, uploadsId) {
 
         plItems.sort((a, b) => (a.snippet.position||0) - (b.snippet.position||0));
 
-        // プレイリストのリリース日 = 収録トラックの最小 publishedAt（プレイリスト自体のdateは不正確なため）
+        // プレイリストのリリース日 = 収録トラックの最大 publishedAt を使う
+        // 理由: 古い曲を収録している場合、最小値だとそのアルバムの日付が汚染される
+        // 例: 2023年アルバムに2021年シングルが収録→最小=2021（誤）、最大=2023（正）
         let releaseDate = '';
         for (const item of plItems) {
           const d = item.snippet.publishedAt || '';
-          if (d && (!releaseDate || d < releaseDate)) releaseDate = d;
+          if (d > releaseDate) releaseDate = d;
         }
         playlistData.push({ releaseDate, plItems });
       }
