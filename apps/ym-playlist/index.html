@@ -340,74 +340,6 @@ async function fetchAllVideos(channelId, uploadsId) {
       sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>アルバム/シングル一覧を取得中... ${playlists.length}件</div>`;
     } while (plPageToken);
 
-    // Step1b: YouTube Music innertube APIでOLAK5uy_アルバムプレイリストIDを探す
-    // playlists/search APIはトピックチャンネルのOLAK5uy_を返さないため補完
-    {
-      const existingPlIds = new Set(playlists.map(p => p.id));
-      const olakIds = new Set();
-      try {
-        sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>YouTube Musicからアルバム情報を取得中...</div>`;
-        const r = await fetch('https://music.youtube.com/youtubei/v1/browse?key=AIzaSyC9XL3ZjWdtnsGnGoMKgZJXYi2E32a6ppU&prettyPrint=false', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            browseId: channelId,
-            context: { client: { clientName: 'WEB_REMIX', clientVersion: '1.20240101.01.00', hl: 'ja', gl: 'JP' } }
-          })
-        });
-        console.log('[ym-playlist] innertube status:', r.status, r.ok);
-        if (r.ok) {
-          const findOlak = obj => {
-            if (!obj) return;
-            if (typeof obj === 'string') { if (obj.startsWith('OLAK5uy_')) olakIds.add(obj); return; }
-            if (Array.isArray(obj)) { obj.forEach(findOlak); return; }
-            if (typeof obj === 'object') Object.values(obj).forEach(findOlak);
-          };
-          findOlak(await r.json());
-          console.log('[ym-playlist] innertube OLAK5uy_ found:', [...olakIds]);
-        } else {
-          const txt = await r.text();
-          console.log('[ym-playlist] innertube error body:', txt.slice(0, 300));
-        }
-      } catch(e) { console.log('[ym-playlist] innertube failed (CORS?):', e.message); }
-
-      // 発見したOLAK5uy_ IDをData APIで取得してplaylistsに追加
-      const newOlaks = [...olakIds].filter(id => !existingPlIds.has(id));
-      for (let i = 0; i < newOlaks.length; i += 50) {
-        const ids = newOlaks.slice(i, i+50).join(',');
-        const d = await ytGet(`https://www.googleapis.com/youtube/v3/playlists?part=snippet&id=${ids}`);
-        (d.items || []).forEach(pl => { if (!existingPlIds.has(pl.id)) { existingPlIds.add(pl.id); playlists.push(pl); } });
-      }
-    }
-    console.log('[ym-playlist] Step1: playlists found:', playlists.length, playlists.map(p => p.id + ' ' + p.snippet?.title));
-
-    // Step1.5: アップロードプレイリストの順序を取得（同日内のアルバムトラック順推定に使用）
-    // アップロードプレイリストでは古い動画ほどpositionが大きい（新しい動画がposition=0付近）
-    // YouTube Musicはアルバムをトラック順（1,2,3...）にアップロードするため、
-    // 同日アップロード内でpositionが大きい=早くアップロード=アルバム前の曲
-    const uploadsPositionMap = new Map(); // videoId -> position in uploads playlist
-    {
-      let uId = uploadsId;
-      if (!uId) {
-        const ch = await ytGet(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}`);
-        uId = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
-      }
-      if (uId) {
-        sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>アップロード順序を取得中...</div>`;
-        let pos = 0, upToken = '';
-        do {
-          const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uId}&maxResults=50${upToken ? '&pageToken='+upToken : ''}`;
-          const d = await ytGet(url);
-          for (const item of (d.items || [])) {
-            const vid = item.snippet.resourceId?.videoId;
-            if (vid && !uploadsPositionMap.has(vid)) uploadsPositionMap.set(vid, pos++);
-          }
-          upToken = d.nextPageToken || '';
-        } while (upToken);
-        console.log('[ym-playlist] Step1.5: uploadsPositionMap size:', uploadsPositionMap.size);
-      }
-    }
-
     let items = [];
     const videoDetailMap = new Map();
     const videoAlbumPosMap = new Map(); // videoId -> { pos, len } ：アルバム内ポジション
@@ -457,7 +389,6 @@ async function fetchAllVideos(channelId, uploadsId) {
 
       // Step4: 各プレイリストのリリース日を計算
       // リリース日 = 収録動画の公開日の最大値（最新トラックがそのリリースの発売日に近い）
-      // plTimeは同日内の順序付けに使うプレイリスト自身の作成日時
       const playlistData = rawPlaylistData.map(({ pl, plItems }) => {
         let maxDate = '', minDate = '';
         for (const item of plItems) {
@@ -481,20 +412,14 @@ async function fetchAllVideos(channelId, uploadsId) {
         if (lenCmp !== 0) return lenCmp;
         return (a.pl.snippet.publishedAt || '').localeCompare(b.pl.snippet.publishedAt || '');
       });
-      console.log('[ym-playlist] playlist sort order (最大トラック数:', Math.max(...rawPlaylistData.map(d=>d.plItems.length)), '):',
-        playlistData.map(p => ({ rd: p.releaseDate.slice(0,10), min: p.minDate.slice(0,10), t: p.plItems.length, pl: p.pl.snippet.publishedAt, first: p.plItems[0]?.snippet?.title })));
 
       // Step6: ソート済みプレイリスト順に楽曲を収集（重複動画IDはスキップ）
       const seenVideoIds = new Set();
-      for (const { pl, plItems, releaseDate } of playlistData) {
-        const plTime = pl.snippet.publishedAt || '';
+      for (const { plItems } of playlistData) {
         for (const item of plItems) {
           const vid = item.snippet.resourceId?.videoId;
           if (vid && !seenVideoIds.has(vid)) {
             seenVideoIds.add(vid);
-            item._releaseDate = (releaseDate || item.snippet.publishedAt || '').slice(0, 10);
-            item._firstPosition = item.snippet.position ?? 0;
-            item._playlistTime = plTime; // プレイリスト自身の作成日時（同日内の曲順決定に使用）
             items.push(item);
           }
         }
@@ -585,26 +510,14 @@ async function fetchAllVideos(channelId, uploadsId) {
     });
 
     filteredVideos = Array.from(dedupMap.values()).map(e => e.item);
-    // 1次: 動画の公開日（YYYY-MM-DD）で古い順
-    // 2次: 同日内 → アップロードプレイリスト位置の降順（早くアップロード=positionが大きい=アルバム前の曲）
-    // 3次: アルバム内ポジション（最大トラック数プレイリスト基準）
-    // 4次: プレイリスト作成日時
     filteredVideos.sort((a, b) => {
       const da = (a.snippet.publishedAt || '').slice(0, 10);
       const db = (b.snippet.publishedAt || '').slice(0, 10);
       if (da !== db) return da.localeCompare(db);
       const vidA = a.snippet.resourceId?.videoId;
       const vidB = b.snippet.resourceId?.videoId;
-      const ua = uploadsPositionMap.get(vidA) ?? -1;
-      const ub = uploadsPositionMap.get(vidB) ?? -1;
-      if (ua !== ub) return ub - ua; // 降順: positionが大きい（早くアップロード）が先
-      const albumCmp = (videoAlbumPosMap.get(vidA)?.pos ?? 9999) - (videoAlbumPosMap.get(vidB)?.pos ?? 9999);
-      if (albumCmp !== 0) return albumCmp;
-      return (a._playlistTime || '').localeCompare(b._playlistTime || '');
+      return (videoAlbumPosMap.get(vidA)?.pos ?? 9999) - (videoAlbumPosMap.get(vidB)?.pos ?? 9999);
     });
-    console.log('[ym-playlist] final sort (same 2023-05-02 tracks):',
-      filteredVideos.filter(v => (v.snippet.publishedAt||'').slice(0,10) === '2023-05-02')
-        .map(v => { const vid = v.snippet.resourceId?.videoId; return { title: v.snippet.title, up: uploadsPositionMap.get(vid), alb: videoAlbumPosMap.get(vid) }; }));
 
     // 除外曲リストを保存
     _skippedVideos = items.filter(v => {
