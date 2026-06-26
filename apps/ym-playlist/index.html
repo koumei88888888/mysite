@@ -330,7 +330,7 @@ async function fetchAllVideos(channelId, uploadsId) {
   const sec = document.getElementById('tracks-section');
   sec.innerHTML = '<div class="status-bar"><div class="spinner"></div>動画一覧を取得中...</div>';
   try {
-    // Step1: アルバム/シングルのプレイリスト一覧を取得し古い順にソート
+    // Step1: アルバム/シングルのプレイリスト一覧を取得
     let playlists = [], plPageToken = '';
     do {
       const url = `https://www.googleapis.com/youtube/v3/playlists?part=snippet&channelId=${channelId}&maxResults=50${plPageToken ? '&pageToken='+plPageToken : ''}`;
@@ -340,29 +340,45 @@ async function fetchAllVideos(channelId, uploadsId) {
       sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>アルバム/シングル一覧を取得中... ${playlists.length}件</div>`;
     } while (plPageToken);
 
-    playlists.sort((a, b) => (a.snippet.publishedAt||'').localeCompare(b.snippet.publishedAt||''));
-
-    // Step2: 各プレイリストからトラック順に楽曲を収集（重複動画IDはスキップ）
     let items = [];
-    const seenVideoIds = new Set();
 
-    for (let pi = 0; pi < playlists.length; pi++) {
-      const pl = playlists[pi];
-      sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>楽曲を取得中... (${pi+1}/${playlists.length}): ${pl.snippet.title}</div>`;
-      let plItems = [], itemPageToken = '';
-      do {
-        const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${pl.id}&maxResults=50${itemPageToken ? '&pageToken='+itemPageToken : ''}`;
-        const d = await ytGet(url);
-        plItems = plItems.concat(d.items || []);
-        itemPageToken = d.nextPageToken || '';
-      } while (itemPageToken);
+    if (playlists.length > 0) {
+      // Step2: 各プレイリストのアイテムを取得し、トラックの最小publishedAtからリリース日を算出
+      const playlistData = [];
+      for (let pi = 0; pi < playlists.length; pi++) {
+        const pl = playlists[pi];
+        sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>楽曲を取得中... (${pi+1}/${playlists.length}): ${pl.snippet.title}</div>`;
+        let plItems = [], itemPageToken = '';
+        do {
+          const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${pl.id}&maxResults=50${itemPageToken ? '&pageToken='+itemPageToken : ''}`;
+          const d = await ytGet(url);
+          plItems = plItems.concat(d.items || []);
+          itemPageToken = d.nextPageToken || '';
+        } while (itemPageToken);
 
-      plItems.sort((a, b) => (a.snippet.position||0) - (b.snippet.position||0));
-      for (const item of plItems) {
-        const vid = item.snippet.resourceId?.videoId;
-        if (vid && !seenVideoIds.has(vid)) {
-          seenVideoIds.add(vid);
-          items.push(item);
+        plItems.sort((a, b) => (a.snippet.position||0) - (b.snippet.position||0));
+
+        // プレイリストのリリース日 = 収録トラックの最小 publishedAt（プレイリスト自体のdateは不正確なため）
+        let releaseDate = '';
+        for (const item of plItems) {
+          const d = item.snippet.publishedAt || '';
+          if (d && (!releaseDate || d < releaseDate)) releaseDate = d;
+        }
+        playlistData.push({ releaseDate, plItems });
+      }
+
+      // Step3: 実際のリリース日（古い順）でプレイリストをソート
+      playlistData.sort((a, b) => a.releaseDate.localeCompare(b.releaseDate));
+
+      // Step4: ソート済みプレイリスト順に楽曲を収集（重複動画IDはスキップ）
+      const seenVideoIds = new Set();
+      for (const { plItems } of playlistData) {
+        for (const item of plItems) {
+          const vid = item.snippet.resourceId?.videoId;
+          if (vid && !seenVideoIds.has(vid)) {
+            seenVideoIds.add(vid);
+            items.push(item);
+          }
         }
       }
     }
