@@ -347,14 +347,19 @@ async function fetchAllVideos(channelId, uploadsId) {
       const olakIds = new Set();
       try {
         sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>YouTube Musicからアルバム情報を取得中...</div>`;
-        const r = await fetch('https://music.youtube.com/youtubei/v1/browse?prettyPrint=false', {
+        const r = await fetch('https://music.youtube.com/youtubei/v1/browse?key=AIzaSyC9XL3ZjWdtnsGnGoMKgZJXYi2E32a6ppU&prettyPrint=false', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-YouTube-Client-Name': '67',
+            'X-YouTube-Client-Version': '1.20240101.01.00'
+          },
           body: JSON.stringify({
             browseId: channelId,
             context: { client: { clientName: 'WEB_REMIX', clientVersion: '1.20240101.01.00', hl: 'ja', gl: 'JP' } }
           })
         });
+        console.log('[ym-playlist] innertube status:', r.status, r.ok);
         if (r.ok) {
           const findOlak = obj => {
             if (!obj) return;
@@ -364,6 +369,9 @@ async function fetchAllVideos(channelId, uploadsId) {
           };
           findOlak(await r.json());
           console.log('[ym-playlist] innertube OLAK5uy_ found:', [...olakIds]);
+        } else {
+          const txt = await r.text();
+          console.log('[ym-playlist] innertube error body:', txt.slice(0, 300));
         }
       } catch(e) { console.log('[ym-playlist] innertube failed (CORS?):', e.message); }
 
