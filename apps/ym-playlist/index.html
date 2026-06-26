@@ -379,9 +379,15 @@ async function fetchAllVideos(channelId, uploadsId) {
         let releaseDate = '';
         for (const item of plItems) {
           const vid = item.snippet.resourceId?.videoId;
-          const d = videoDetailMap.get(vid)?.snippet?.publishedAt || '';
+          // videoDetail.snippet.publishedAt = Art Track の実際の公開日（最も正確）
+          // なければ playlistItem.snippet.publishedAt にフォールバック
+          const d = videoDetailMap.get(vid)?.snippet?.publishedAt
+                 || item.snippet.publishedAt
+                 || '';
           if (d > releaseDate) releaseDate = d;
         }
+        // それでも取れない場合はプレイリスト自身の作成日にフォールバック
+        if (!releaseDate) releaseDate = pl.snippet.publishedAt || '';
         return { plItems, releaseDate };
       });
 
@@ -395,7 +401,9 @@ async function fetchAllVideos(channelId, uploadsId) {
           const vid = item.snippet.resourceId?.videoId;
           if (vid && !seenVideoIds.has(vid)) {
             seenVideoIds.add(vid);
-            item._releaseDate = releaseDate.slice(0, 10); // シングル/アルバムのリリース日
+            // _releaseDate: プレイリスト(シングル/アルバム)のリリース日
+            // 空の場合は個別動画の公開日にフォールバック（releaseDate が取れなかった場合の保険）
+            item._releaseDate = (releaseDate || item.snippet.publishedAt || '').slice(0, 10);
             items.push(item);
           }
         }
