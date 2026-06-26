@@ -340,6 +340,52 @@ async function fetchAllVideos(channelId, uploadsId) {
       sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>アルバム/シングル一覧を取得中... ${playlists.length}件</div>`;
     } while (plPageToken);
 
+    // Step1b: search APIで補完（playlists APIが返さないアルバムプレイリストを補足）
+    {
+      const existingPlIds = new Set(playlists.map(p => p.id));
+      let searchPlToken = '';
+      do {
+        const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=playlist&maxResults=50${searchPlToken ? '&pageToken='+searchPlToken : ''}`;
+        const d = await ytGet(url);
+        for (const item of (d.items || [])) {
+          const plId = item.id?.playlistId;
+          if (plId && !existingPlIds.has(plId)) {
+            existingPlIds.add(plId);
+            playlists.push({ id: plId, snippet: item.snippet });
+          }
+        }
+        searchPlToken = d.nextPageToken || '';
+      } while (searchPlToken);
+    }
+    console.log('[ym-playlist] Step1: playlists found:', playlists.length, playlists.map(p => p.id + ' ' + p.snippet?.title));
+
+    // Step1.5: アップロードプレイリストの順序を取得（同日内のアルバムトラック順推定に使用）
+    // アップロードプレイリストでは古い動画ほどpositionが大きい（新しい動画がposition=0付近）
+    // YouTube Musicはアルバムをトラック順（1,2,3...）にアップロードするため、
+    // 同日アップロード内でpositionが大きい=早くアップロード=アルバム前の曲
+    const uploadsPositionMap = new Map(); // videoId -> position in uploads playlist
+    {
+      let uId = uploadsId;
+      if (!uId) {
+        const ch = await ytGet(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}`);
+        uId = ch.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+      }
+      if (uId) {
+        sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>アップロード順序を取得中...</div>`;
+        let pos = 0, upToken = '';
+        do {
+          const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uId}&maxResults=50${upToken ? '&pageToken='+upToken : ''}`;
+          const d = await ytGet(url);
+          for (const item of (d.items || [])) {
+            const vid = item.snippet.resourceId?.videoId;
+            if (vid && !uploadsPositionMap.has(vid)) uploadsPositionMap.set(vid, pos++);
+          }
+          upToken = d.nextPageToken || '';
+        } while (upToken);
+        console.log('[ym-playlist] Step1.5: uploadsPositionMap size:', uploadsPositionMap.size);
+      }
+    }
+
     let items = [];
     const videoDetailMap = new Map();
     const videoAlbumPosMap = new Map(); // videoId -> { pos, len } ：アルバム内ポジション
@@ -518,19 +564,25 @@ async function fetchAllVideos(channelId, uploadsId) {
 
     filteredVideos = Array.from(dedupMap.values()).map(e => e.item);
     // 1次: 動画の公開日（YYYY-MM-DD）で古い順
-    // 2次: 同日内 → プレイリスト作成日時（YouTube Musicがアルバムトラック順に作成する場合にアルバム順が保たれる）
-    // 3次: 同プレイリスト内 → アルバム内ポジション（最大トラック数プレイリスト基準）
+    // 2次: 同日内 → アップロードプレイリスト位置の降順（早くアップロード=positionが大きい=アルバム前の曲）
+    // 3次: アルバム内ポジション（最大トラック数プレイリスト基準）
+    // 4次: プレイリスト作成日時
     filteredVideos.sort((a, b) => {
       const da = (a.snippet.publishedAt || '').slice(0, 10);
       const db = (b.snippet.publishedAt || '').slice(0, 10);
       if (da !== db) return da.localeCompare(db);
-      const pa = a._playlistTime || '';
-      const pb = b._playlistTime || '';
-      if (pa !== pb) return pa.localeCompare(pb);
       const vidA = a.snippet.resourceId?.videoId;
       const vidB = b.snippet.resourceId?.videoId;
-      return (videoAlbumPosMap.get(vidA)?.pos ?? 9999) - (videoAlbumPosMap.get(vidB)?.pos ?? 9999);
+      const ua = uploadsPositionMap.get(vidA) ?? -1;
+      const ub = uploadsPositionMap.get(vidB) ?? -1;
+      if (ua !== ub) return ub - ua; // 降順: positionが大きい（早くアップロード）が先
+      const albumCmp = (videoAlbumPosMap.get(vidA)?.pos ?? 9999) - (videoAlbumPosMap.get(vidB)?.pos ?? 9999);
+      if (albumCmp !== 0) return albumCmp;
+      return (a._playlistTime || '').localeCompare(b._playlistTime || '');
     });
+    console.log('[ym-playlist] final sort (same 2023-05-02 tracks):',
+      filteredVideos.filter(v => (v.snippet.publishedAt||'').slice(0,10) === '2023-05-02')
+        .map(v => { const vid = v.snippet.resourceId?.videoId; return { title: v.snippet.title, up: uploadsPositionMap.get(vid), alb: videoAlbumPosMap.get(vid) }; }));
 
     // 除外曲リストを保存
     _skippedVideos = items.filter(v => {
