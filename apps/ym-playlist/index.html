@@ -342,6 +342,7 @@ async function fetchAllVideos(channelId, uploadsId) {
 
     let items = [];
     const videoDetailMap = new Map();
+    const videoAlbumPosMap = new Map(); // videoId -> { pos, len } ：アルバム内ポジション
 
     if (playlists.length > 0) {
       // Step2: 各プレイリストのアイテムを取得（videoId + position）
@@ -371,6 +372,19 @@ async function fetchAllVideos(channelId, uploadsId) {
         const ids = allVids.slice(i, i+50).join(',');
         const d = await ytGet(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${ids}&hl=ja&regionCode=JP`);
         d.items.forEach(v => videoDetailMap.set(v.id, v));
+      }
+
+      // Step3.5: 各動画を「最もトラック数が多いプレイリスト（=アルバム）内のポジション」にマッピング
+      // 処理順序に依存せず、アルバムのtrack orderを確実に取得できる
+      for (const { plItems } of rawPlaylistData) {
+        for (const item of plItems) {
+          const vid = item.snippet.resourceId?.videoId;
+          if (!vid) continue;
+          const existing = videoAlbumPosMap.get(vid);
+          if (!existing || plItems.length > existing.len) {
+            videoAlbumPosMap.set(vid, { pos: item.snippet.position ?? 0, len: plItems.length });
+          }
+        }
       }
 
       // Step4: 各プレイリストのリリース日（最大値）と最小値を計算
@@ -502,12 +516,17 @@ async function fetchAllVideos(channelId, uploadsId) {
     });
 
     filteredVideos = Array.from(dedupMap.values()).map(e => e.item);
-    // 1次: snippet.publishedAt の日付部分（YYYY-MM-DD）、2次: アルバム内ポジション
+    // 1次: snippet.publishedAt の日付部分（YYYY-MM-DD）
+    // 2次: アルバム内ポジション（最もトラック数が多いプレイリスト=アルバムでのtrack order）
     filteredVideos.sort((a, b) => {
       const da = (a.snippet.publishedAt || '').slice(0, 10);
       const db = (b.snippet.publishedAt || '').slice(0, 10);
       if (da !== db) return da.localeCompare(db);
-      return (a._firstPosition ?? 0) - (b._firstPosition ?? 0);
+      const vidA = a.snippet.resourceId?.videoId;
+      const vidB = b.snippet.resourceId?.videoId;
+      const posA = videoAlbumPosMap.get(vidA)?.pos ?? 9999;
+      const posB = videoAlbumPosMap.get(vidB)?.pos ?? 9999;
+      return posA - posB;
     });
 
     // 除外曲リストを保存
