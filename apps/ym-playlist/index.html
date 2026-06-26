@@ -387,7 +387,9 @@ async function fetchAllVideos(channelId, uploadsId) {
         }
       }
 
-      // Step4: 各プレイリストのリリース日（最大値）と最小値を計算
+      // Step4: 各プレイリストのリリース日を計算
+      // リリース日 = 収録動画の公開日の最大値（最新トラックがそのリリースの発売日に近い）
+      // plTimeは同日内の順序付けに使うプレイリスト自身の作成日時
       const playlistData = rawPlaylistData.map(({ pl, plItems }) => {
         let maxDate = '', minDate = '';
         for (const item of plItems) {
@@ -397,35 +399,34 @@ async function fetchAllVideos(channelId, uploadsId) {
           if (d && (d < minDate || !minDate)) minDate = d;
         }
         const releaseDate = maxDate || pl.snippet.publishedAt || '';
-        const minDate2 = minDate || releaseDate;
-        return { plItems, releaseDate, minDate: minDate2 };
+        return { pl, plItems, releaseDate, minDate: minDate || releaseDate };
       });
 
       // Step5: リリース日（古い順）でプレイリストをソート
-      // 同日の場合: minDate が小さいもの（古い曲を含む=アルバム）を先に処理して曲順を保持
+      // 同日の場合: (1) minDateが古い方（古い曲を含む=アルバム）→ (2) トラック数多い順 → (3) プレイリスト作成日時順
       playlistData.sort((a, b) => {
         const cmp = a.releaseDate.localeCompare(b.releaseDate);
         if (cmp !== 0) return cmp;
         const minCmp = a.minDate.localeCompare(b.minDate);
         if (minCmp !== 0) return minCmp;
-        return b.plItems.length - a.plItems.length; // 同minDate: トラック数多い順
+        const lenCmp = b.plItems.length - a.plItems.length;
+        if (lenCmp !== 0) return lenCmp;
+        return (a.pl.snippet.publishedAt || '').localeCompare(b.pl.snippet.publishedAt || '');
       });
-      console.log('[ym-playlist] playlist sort order:', playlistData.map(p => ({
-        releaseDate: p.releaseDate,
-        minDate: p.minDate,
-        tracks: p.plItems.length,
-        firstTrack: p.plItems[0]?.snippet?.title
-      })));
+      console.log('[ym-playlist] playlist sort order (最大トラック数:', Math.max(...rawPlaylistData.map(d=>d.plItems.length)), '):',
+        playlistData.map(p => ({ rd: p.releaseDate.slice(0,10), min: p.minDate.slice(0,10), t: p.plItems.length, pl: p.pl.snippet.publishedAt, first: p.plItems[0]?.snippet?.title })));
 
-      // Step6: ソート済みプレイリスト順に楽曲を収集（重複動画IDはスキップ）、プレイリストのリリース日を添付
+      // Step6: ソート済みプレイリスト順に楽曲を収集（重複動画IDはスキップ）
       const seenVideoIds = new Set();
-      for (const { plItems, releaseDate } of playlistData) {
+      for (const { pl, plItems, releaseDate } of playlistData) {
+        const plTime = pl.snippet.publishedAt || '';
         for (const item of plItems) {
           const vid = item.snippet.resourceId?.videoId;
           if (vid && !seenVideoIds.has(vid)) {
             seenVideoIds.add(vid);
             item._releaseDate = (releaseDate || item.snippet.publishedAt || '').slice(0, 10);
-            item._firstPosition = item.snippet.position ?? 0; // アルバム優先処理時のアルバム内ポジション
+            item._firstPosition = item.snippet.position ?? 0;
+            item._playlistTime = plTime; // プレイリスト自身の作成日時（同日内の曲順決定に使用）
             items.push(item);
           }
         }
@@ -516,17 +517,19 @@ async function fetchAllVideos(channelId, uploadsId) {
     });
 
     filteredVideos = Array.from(dedupMap.values()).map(e => e.item);
-    // 1次: snippet.publishedAt の日付部分（YYYY-MM-DD）
-    // 2次: アルバム内ポジション（最もトラック数が多いプレイリスト=アルバムでのtrack order）
+    // 1次: 動画の公開日（YYYY-MM-DD）で古い順
+    // 2次: 同日内 → プレイリスト作成日時（YouTube Musicがアルバムトラック順に作成する場合にアルバム順が保たれる）
+    // 3次: 同プレイリスト内 → アルバム内ポジション（最大トラック数プレイリスト基準）
     filteredVideos.sort((a, b) => {
       const da = (a.snippet.publishedAt || '').slice(0, 10);
       const db = (b.snippet.publishedAt || '').slice(0, 10);
       if (da !== db) return da.localeCompare(db);
+      const pa = a._playlistTime || '';
+      const pb = b._playlistTime || '';
+      if (pa !== pb) return pa.localeCompare(pb);
       const vidA = a.snippet.resourceId?.videoId;
       const vidB = b.snippet.resourceId?.videoId;
-      const posA = videoAlbumPosMap.get(vidA)?.pos ?? 9999;
-      const posB = videoAlbumPosMap.get(vidB)?.pos ?? 9999;
-      return posA - posB;
+      return (videoAlbumPosMap.get(vidA)?.pos ?? 9999) - (videoAlbumPosMap.get(vidB)?.pos ?? 9999);
     });
 
     // 除外曲リストを保存
