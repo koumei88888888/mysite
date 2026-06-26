@@ -392,7 +392,12 @@ async function fetchAllVideos(channelId, uploadsId) {
       });
 
       // Step5: リリース日（古い順）でプレイリストをソート
-      playlistData.sort((a, b) => a.releaseDate.localeCompare(b.releaseDate));
+      // 同日の場合はトラック数が多い方（アルバム）を先に処理してアルバム内順番を保持
+      playlistData.sort((a, b) => {
+        const cmp = a.releaseDate.localeCompare(b.releaseDate);
+        if (cmp !== 0) return cmp;
+        return b.plItems.length - a.plItems.length;
+      });
       console.log('[ym-playlist] playlist sort order:', playlistData.map(p => ({
         title: p.plItems[0]?.snippet?.videoOwnerChannelTitle || p.plItems[0]?.snippet?.channelTitle || '?',
         releaseDate: p.releaseDate,
@@ -500,8 +505,8 @@ async function fetchAllVideos(channelId, uploadsId) {
     });
 
     filteredVideos = Array.from(dedupMap.values()).map(e => e.item);
-    // snippet.publishedAt（Art Trackの実際の公開日）で最終ソート。CSVの「投稿日」と同じ値
-    filteredVideos.sort((a, b) => (a.snippet.publishedAt || '').localeCompare(b.snippet.publishedAt || ''));
+    // snippet.publishedAt の日付部分（YYYY-MM-DD）でソート。時刻まで比較するとアルバム内順番が崩れる
+    filteredVideos.sort((a, b) => (a.snippet.publishedAt || '').slice(0, 10).localeCompare((b.snippet.publishedAt || '').slice(0, 10)));
 
     // 除外曲リストを保存
     _skippedVideos = items.filter(v => {
