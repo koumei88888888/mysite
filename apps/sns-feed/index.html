@@ -317,6 +317,7 @@ function ensureTwitterWidget() {
 
 function mountTwitterEmbed(container, url) {
   ensureTwitterWidget();
+  container.innerHTML = '';
   const bq = document.createElement('blockquote');
   bq.className = 'twitter-tweet';
   const a = document.createElement('a');
