@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SNS Feed — ジャンル別投稿まとめ</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --accent: #7c5cff; --accent-dim: #6247d9;
+    --bg: #0a0a0a; --surface: #141414; --surface2: #1e1e1e;
+    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
+    --text: #f0f0f0; --muted: #888; --dimmer: #555;
+    --font-display: 'Syne', sans-serif; --font-mono: 'DM Mono', monospace;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-display); min-height: 100vh; }
+  .shell { max-width: 680px; margin: 0 auto; padding: 3rem 1.25rem 6rem; }
+
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 2rem; flex-wrap: wrap; }
+  .portal-back { font-family: var(--font-mono); font-size: 11px; color: var(--muted); border: 1px solid var(--border2); border-radius: 999px; padding: 5px 13px; text-decoration: none; transition: color 0.15s, border-color 0.15s; white-space: nowrap; margin-left: auto; }
+  .portal-back:hover { color: var(--text); border-color: var(--accent); }
+  .logo-mark { width: 44px; height: 44px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 20px; }
+  .header-text h1 { font-size: 21px; font-weight: 700; letter-spacing: -0.02em; }
+  .header-text p { font-size: 12px; color: var(--muted); margin-top: 2px; font-family: var(--font-mono); }
+
+  /* --- ジャンルタブ / チップ --- */
+  .tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
+  .tabs::-webkit-scrollbar { height: 3px; }
+  .tab { flex-shrink: 0; font-family: var(--font-display); font-weight: 600; font-size: 13px; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--border2); background: var(--surface); color: var(--muted); cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .chip { font-family: var(--font-mono); font-size: 11px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border2); background: transparent; color: var(--dimmer); cursor: pointer; transition: all 0.15s; }
+  .chip.active { color: var(--accent); border-color: var(--accent); background: rgba(124,92,255,0.1); }
+
+  .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+  .count { font-family: var(--font-mono); font-size: 12px; color: var(--dimmer); }
+  .sort-btn { font-family: var(--font-mono); font-size: 12px; color: var(--muted); background: var(--surface); border: 1px solid var(--border2); border-radius: 999px; padding: 6px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: border-color 0.15s, color 0.15s; }
+  .sort-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  /* --- 投稿カード --- */
+  .post-list { display: flex; flex-direction: column; gap: 1.25rem; }
+  .post-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1rem; }
+  .post-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .badge { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; padding: 3px 9px; border-radius: 999px; background: var(--surface2); color: var(--muted); }
+  .badge.major { color: var(--accent); border: 1px solid rgba(124,92,255,0.35); }
+  .post-date { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); margin-left: auto; }
+  .platform-icon { font-size: 13px; }
+
+  .embed-mount { min-height: 90px; display: flex; align-items: center; justify-content: center; }
+  .embed-placeholder { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); padding: 2rem 0; }
+  .embed-mount iframe { max-width: 100%; }
+  .twitter-tweet, .bluesky-embed { margin: 0 auto !important; }
+
+  .thread-toggle { margin-top: 10px; font-family: var(--font-mono); font-size: 12px; color: var(--accent); background: rgba(124,92,255,0.08); border: 1px dashed rgba(124,92,255,0.4); border-radius: 8px; padding: 8px 12px; cursor: pointer; width: 100%; text-align: left; transition: background 0.15s; }
+  .thread-toggle:hover { background: rgba(124,92,255,0.16); }
+  .thread-body { margin-top: 12px; display: none; flex-direction: column; gap: 12px; border-left: 2px solid var(--border2); padding-left: 12px; }
+  .thread-body.open { display: flex; }
+  .thread-body .embed-mount { min-height: 60px; }
+
+  .empty-state, .load-error { font-family: var(--font-mono); font-size: 13px; color: var(--muted); text-align: center; padding: 3rem 0; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <div class="logo-mark">🧵</div>
+    <div class="header-text">
+      <h1>SNS Feed</h1>
+      <p>X / Bluesky の投稿をジャンル別にまとめて閲覧</p>
+    </div>
+    <a class="portal-back" href="../../">← Portal</a>
+  </header>
+
+  <div class="tabs" id="major-tabs"></div>
+  <div class="chips" id="minor-chips"></div>
+
+  <div class="toolbar">
+    <span class="count" id="post-count"></span>
+    <button class="sort-btn" id="sort-btn" onclick="toggleSort()"></button>
+  </div>
+
+  <div class="post-list" id="post-list"></div>
+
+</div>
+
+<script>
+/* ============================================================
+ * データ読込・CSVパース
+ * ============================================================ */
+let ALL_POSTS = [];
+let currentMajor = 'すべて';
+let activeMinors = new Set();
+let sortOrder = 'desc'; // 'desc' = 新しい順, 'asc' = 古い順
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  const normalized = text.replace(/^﻿/, '').replace(/\r\n/g, '\n');
+  for (let i = 0; i < normalized.length; i++) {
+    const ch = normalized[i];
+    if (inQuotes) {
+      if (ch === '"') { if (normalized[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
+      else field += ch;
+    } else if (ch === '"') { inQuotes = true; }
+    else if (ch === ',') { row.push(field); field = ''; }
+    else if (ch === '\n') { row.push(field); field = ''; rows.push(row); row = []; }
+    else { field += ch; }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows.filter(r => !(r.length === 1 && r[0].trim() === ''));
+}
+
+function detectPlatform(url) {
+  if (/bsky\.app/.test(url)) return 'bluesky';
+  if (/(x\.com|twitter\.com)/.test(url)) return 'x';
+  return null;
+}
+
+async function loadPosts() {
+  const listEl = document.getElementById('post-list');
+  try {
+    const text = await fetch('./post.csv').then(r => {
+      if (!r.ok) throw new Error(r.status);
+      return r.text();
+    });
+    const rows = parseCSV(text);
+    const header = rows[0] || [];
+    const idx = {
+      url: header.indexOf('URL'),
+      major: header.indexOf('大ジャンル'),
+      minor: header.indexOf('小ジャンル'),
+      date: header.indexOf('投稿日'),
+      thread: header.indexOf('スレッドURL'),
+    };
+    ALL_POSTS = rows.slice(1)
+      .filter(r => (r[idx.url] || '').trim())
+      .map(r => {
+        const url = r[idx.url].trim();
+        const threadRaw = idx.thread !== -1 ? (r[idx.thread] || '').trim() : '';
+        return {
+          url,
+          platform: detectPlatform(url),
+          major: (r[idx.major] || '未分類').trim() || '未分類',
+          minor: (r[idx.minor] || '未分類').trim() || '未分類',
+          date: (r[idx.date] || '').trim(),
+          threadUrls: threadRaw ? threadRaw.split(';').map(s => s.trim()).filter(Boolean) : [],
+        };
+      })
+      .filter(p => p.platform);
+    buildMajorTabs();
+    render();
+  } catch (e) {
+    listEl.innerHTML = `<div class="load-error">post.csv の読み込みに失敗しました: ${e.message}<br>ローカルサーバー経由（例: npx serve）で開いてください。</div>`;
+  }
+}
+
+/* ============================================================
+ * ジャンルタブ / チップ / ソート
+ * ============================================================ */
+function buildMajorTabs() {
+  const majors = ['すべて', ...new Set(ALL_POSTS.map(p => p.major))];
+  const tabsEl = document.getElementById('major-tabs');
+  tabsEl.innerHTML = majors.map(m =>
+    `<button class="tab${m === currentMajor ? ' active' : ''}" data-major="${escapeAttr(m)}">${escapeHtml(m)}</button>`
+  ).join('');
+  tabsEl.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentMajor = btn.dataset.major;
+      resetMinors();
+      buildMajorTabs();
+      buildMinorChips();
+      render();
+    });
+  });
+  if (activeMinors.size === 0) resetMinors();
+}
+
+function minorsForCurrentMajor() {
+  const posts = currentMajor === 'すべて' ? ALL_POSTS : ALL_POSTS.filter(p => p.major === currentMajor);
+  return [...new Set(posts.map(p => p.minor))];
+}
+
+function resetMinors() {
+  activeMinors = new Set(minorsForCurrentMajor());
+}
+
+function buildMinorChips() {
+  const minors = minorsForCurrentMajor();
+  const chipsEl = document.getElementById('minor-chips');
+  chipsEl.innerHTML = minors.map(m =>
+    `<button class="chip${activeMinors.has(m) ? ' active' : ''}" data-minor="${escapeAttr(m)}">${escapeHtml(m)}</button>`
+  ).join('');
+  chipsEl.querySelectorAll('.chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const m = btn.dataset.minor;
+      if (activeMinors.has(m)) activeMinors.delete(m); else activeMinors.add(m);
+      btn.classList.toggle('active');
+      render();
+    });
+  });
+}
+
+function toggleSort() {
+  sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
+  render();
+}
+
+function updateSortButton() {
+  document.getElementById('sort-btn').textContent = sortOrder === 'desc' ? '新しい順 ↓' : '古い順 ↑';
+}
+
+/* ============================================================
+ * 描画
+ * ============================================================ */
+let embedObserver = null;
+
+function getFilteredSortedPosts() {
+  const filtered = ALL_POSTS.filter(p =>
+    (currentMajor === 'すべて' || p.major === currentMajor) && activeMinors.has(p.minor)
+  );
+  filtered.sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return sortOrder === 'desc' ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date);
+  });
+  return filtered;
+}
+
+function render() {
+  buildMinorChips();
+  updateSortButton();
+  const posts = getFilteredSortedPosts();
+  document.getElementById('post-count').textContent = `${posts.length}件`;
+
+  const listEl = document.getElementById('post-list');
+  if (posts.length === 0) {
+    listEl.innerHTML = '<div class="empty-state">該当する投稿がありません</div>';
+    return;
+  }
+
+  if (embedObserver) embedObserver.disconnect();
+  embedObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        mountEmbed(entry.target);
+        embedObserver.unobserve(entry.target);
+      }
+    });
+  }, { rootMargin: '300px 0px' });
+
+  listEl.innerHTML = posts.map((p, i) => renderCard(p, i)).join('');
+
+  listEl.querySelectorAll('.embed-mount[data-role="main"]').forEach(el => embedObserver.observe(el));
+  listEl.querySelectorAll('.thread-toggle').forEach(btn => {
+    btn.addEventListener('click', () => onThreadToggle(btn));
+  });
+}
+
+function renderCard(p, i) {
+  const platformIcon = p.platform === 'x' ? '𝕏' : '🦋';
+  const hasXThread = p.platform === 'x' && p.threadUrls.length > 1;
+  return `
+    <div class="post-card" data-index="${i}">
+      <div class="post-meta">
+        <span class="badge major">${escapeHtml(p.major)}</span>
+        <span class="badge">${escapeHtml(p.minor)}</span>
+        <span class="post-date"><span class="platform-icon">${platformIcon}</span> ${escapeHtml(p.date || '日付不明')}</span>
+      </div>
+      <div class="embed-mount" data-role="main" data-url="${escapeAttr(p.url)}" data-platform="${p.platform}">
+        <div class="embed-placeholder">読み込み中…</div>
+      </div>
+      ${hasXThread ? `<button class="thread-toggle" data-urls="${escapeAttr(JSON.stringify(p.threadUrls.slice(1)))}">▶ ツリーを表示 (${p.threadUrls.length - 1}件)</button>
+      <div class="thread-body"></div>` : ''}
+      ${p.platform === 'bluesky' ? `<div class="thread-slot" data-url="${escapeAttr(p.url)}"></div>` : ''}
+    </div>`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+/* ============================================================
+ * 埋め込み（共通マウント処理）
+ * ============================================================ */
+function mountEmbed(container) {
+  const url = container.dataset.url;
+  const platform = container.dataset.platform;
+  container.innerHTML = '';
+  if (platform === 'x') mountTwitterEmbed(container, url);
+  else if (platform === 'bluesky') mountBlueskyEmbed(container, url).then(() => {
+    const card = container.closest('.post-card');
+    const slot = card ? card.querySelector('.thread-slot') : null;
+    if (slot) setupBlueskyThread(slot, url);
+  });
+}
+
+/* ---- X (Twitter) ---- */
+let twitterScriptLoaded = false;
+function ensureTwitterWidget() {
+  if (twitterScriptLoaded) return;
+  twitterScriptLoaded = true;
+  const s = document.createElement('script');
+  s.async = true;
+  s.src = 'https://platform.twitter.com/widgets.js';
+  document.body.appendChild(s);
+}
+
+function mountTwitterEmbed(container, url) {
+  ensureTwitterWidget();
+  const bq = document.createElement('blockquote');
+  bq.className = 'twitter-tweet';
+  const a = document.createElement('a');
+  a.href = url;
+  bq.appendChild(a);
+  container.appendChild(bq);
+  runTwitterWidgets(container);
+}
+
+function runTwitterWidgets(container) {
+  if (window.twttr && window.twttr.ready) {
+    window.twttr.ready(t => t.widgets.load(container));
+  } else {
+    setTimeout(() => runTwitterWidgets(container), 300);
+  }
+}
+
+/* ---- X スレッド（post.csv の スレッドURL 列を使用） ---- */
+function onThreadToggle(btn) {
+  const card = btn.closest('.post-card');
+  const body = card.querySelector('.thread-body');
+  if (!btn.dataset.closedLabel) btn.dataset.closedLabel = btn.textContent;
+  const isOpen = body.classList.contains('open');
+  if (isOpen) {
+    body.classList.remove('open');
+    btn.textContent = btn.dataset.closedLabel;
+    return;
+  }
+  if (!body.dataset.mounted) {
+    body.dataset.mounted = '1';
+    const urls = JSON.parse(btn.dataset.urls || '[]');
+    urls.forEach(u => {
+      const mount = document.createElement('div');
+      mount.className = 'embed-mount';
+      mount.innerHTML = '<div class="embed-placeholder">読み込み中…</div>';
+      body.appendChild(mount);
+      mountTwitterEmbed(mount, u);
+    });
+  }
+  body.classList.add('open');
+  btn.textContent = '▼ ツリーを閉じる';
+}
+
+/* ---- Bluesky ---- */
+function ensureBlueskyEmbedScript() {
+  const s = document.createElement('script');
+  s.async = true;
+  s.src = 'https://embed.bsky.app/static/embed.js';
+  document.body.appendChild(s);
+}
+
+async function fetchBlueskyOEmbed(url) {
+  const cacheKey = 'bsky-oembed:' + url;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) return cached;
+  const res = await fetch('https://embed.bsky.app/oembed?url=' + encodeURIComponent(url) + '&format=json');
+  if (!res.ok) throw new Error('oEmbed fetch failed: ' + res.status);
+  const data = await res.json();
+  localStorage.setItem(cacheKey, data.html);
+  return data.html;
+}
+
+async function mountBlueskyEmbed(container, url) {
+  try {
+    const html = await fetchBlueskyOEmbed(url);
+    container.innerHTML = html;
+    ensureBlueskyEmbedScript();
+  } catch (e) {
+    container.innerHTML = `<div class="embed-placeholder">埋め込みを読み込めませんでした（<a href="${escapeAttr(url)}" target="_blank" style="color:var(--accent)">投稿を開く ↗</a>）</div>`;
+  }
+}
+
+/* ---- Bluesky スレッド自動判定（公開APIのみ、認証不要） ---- */
+function parseBlueskyUrl(url) {
+  const m = url.match(/bsky\.app\/profile\/([^/]+)\/post\/([a-zA-Z2-7]+)/);
+  if (!m) return null;
+  return { handle: m[1], rkey: m[2] };
+}
+
+async function resolveDid(handle) {
+  if (handle.startsWith('did:')) return handle;
+  const cacheKey = 'bsky-did:' + handle;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) return cached;
+  const res = await fetch('https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=' + encodeURIComponent(handle));
+  if (!res.ok) throw new Error('resolveHandle failed');
+  const data = await res.json();
+  localStorage.setItem(cacheKey, data.did);
+  return data.did;
+}
+
+async function fetchThreadChain(url) {
+  const parsed = parseBlueskyUrl(url);
+  if (!parsed) return [];
+  const cacheKey = 'bsky-thread:' + url;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) return JSON.parse(cached);
+
+  const did = await resolveDid(parsed.handle);
+  const uri = `at://${did}/app.bsky.feed.post/${parsed.rkey}`;
+  const res = await fetch('https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=' + encodeURIComponent(uri) + '&depth=10');
+  if (!res.ok) throw new Error('getPostThread failed');
+  const data = await res.json();
+
+  const rootAuthorDid = data.thread?.post?.author?.did;
+  const chain = [];
+  let node = data.thread;
+  while (node && node.replies && node.replies.length > 0) {
+    const next = node.replies.find(r => r.post && r.post.author && r.post.author.did === rootAuthorDid);
+    if (!next) break;
+    const nUri = next.post.uri; // at://did/app.bsky.feed.post/rkey
+    const nRkey = nUri.split('/').pop();
+    const permalink = `https://bsky.app/profile/${next.post.author.handle || did}/post/${nRkey}`;
+    chain.push(permalink);
+    node = next;
+  }
+  localStorage.setItem(cacheKey, JSON.stringify(chain));
+  return chain;
+}
+
+async function setupBlueskyThread(slot, url) {
+  let chain;
+  try {
+    chain = await fetchThreadChain(url);
+  } catch (e) {
+    return; // スレッド判定に失敗しても単体埋め込みはそのまま表示する
+  }
+  if (!chain.length) return;
+
+  const btn = document.createElement('button');
+  btn.className = 'thread-toggle';
+  btn.textContent = `▶ ツリーを表示 (${chain.length}件)`;
+  const body = document.createElement('div');
+  body.className = 'thread-body';
+
+  btn.addEventListener('click', () => {
+    const isOpen = body.classList.contains('open');
+    if (isOpen) {
+      body.classList.remove('open');
+      btn.textContent = `▶ ツリーを表示 (${chain.length}件)`;
+      return;
+    }
+    if (!body.dataset.mounted) {
+      body.dataset.mounted = '1';
+      chain.forEach(u => {
+        const mount = document.createElement('div');
+        mount.className = 'embed-mount';
+        mount.innerHTML = '<div class="embed-placeholder">読み込み中…</div>';
+        body.appendChild(mount);
+        mountBlueskyEmbed(mount, u);
+      });
+    }
+    body.classList.add('open');
+    btn.textContent = '▼ ツリーを閉じる';
+  });
+
+  slot.appendChild(btn);
+  slot.appendChild(body);
+}
+
+/* ============================================================ */
+loadPosts();
+</script>
+</body>
+</html>

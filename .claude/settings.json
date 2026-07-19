@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -L \"https://publish.twitter.com/oembed?url=https%3A%2F%2Ftwitter.com%2FBarackObama%2Fstatus%2F266031293945503744\")",
+      "Bash(curl -s \"https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=at://did:plc:yfzqc42lkdurwcpslq7yp3ud/app.bsky.feed.post/3mqbs2zzdi22y&depth=2\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{url_effective}\\\\n\" -L \"https://platform.twitter.com/widgets.js\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{url_effective}\\\\n\" -L \"https://embed.bsky.app/static/embed.js\")"
+    ]
+  }
+}

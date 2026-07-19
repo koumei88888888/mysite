@@ -37,6 +37,16 @@ const APPS = [
     href:   "./apps/ym-playlist/index.html",
     status: "live",
   },
+  {
+    id:     "sns-feed",
+    name:   "SNS Feed",
+    desc:   "X・Blueskyの投稿をジャンル別にまとめて埋め込み表示する",
+    image:  "",
+    color:  "#7c5cff",
+    tags:   ["SNS", "まとめ"],
+    href:   "./apps/sns-feed/index.html",
+    status: "live",
+  },
 
   // ---- 追加例（コメントアウトを外すだけで表示される）----
   // {
