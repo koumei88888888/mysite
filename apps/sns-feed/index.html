@@ -189,8 +189,12 @@ function resetMinors() {
 }
 
 function buildMinorChips() {
-  const minors = minorsForCurrentMajor();
   const chipsEl = document.getElementById('minor-chips');
+  if (currentMajor === 'すべて') {
+    chipsEl.innerHTML = '';
+    return;
+  }
+  const minors = minorsForCurrentMajor();
   chipsEl.innerHTML = minors.map(m =>
     `<button class="chip${activeMinors.has(m) ? ' active' : ''}" data-minor="${escapeAttr(m)}">${escapeHtml(m)}</button>`
   ).join('');
