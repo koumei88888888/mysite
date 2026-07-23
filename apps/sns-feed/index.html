@@ -59,7 +59,6 @@
   .thread-body { margin-top: 12px; display: none; flex-direction: column; gap: 12px; border-left: 2px solid var(--border2); padding-left: 12px; }
   .thread-body.open { display: flex; }
   .thread-body .embed-mount { min-height: 60px; }
-  .thread-item { display: flex; flex-direction: column; gap: 8px; }
   .thread-children { margin-top: 8px; display: flex; flex-direction: column; gap: 12px; border-left: 2px solid var(--border2); padding-left: 12px; }
 
   .empty-state, .load-error { font-family: var(--font-mono); font-size: 13px; color: var(--muted); text-align: center; padding: 3rem 0; }
@@ -159,7 +158,9 @@ function minorsForCurrentMajor() {
 }
 
 function resetMinors() {
-  activeMinors = new Set(minorsForCurrentMajor());
+  // 「すべて」タブは小ジャンルチップ自体を出さないため常に全件表示。
+  // 特定の大ジャンルを選んだ直後は、小ジャンルは何も選択されていない状態にする。
+  activeMinors = currentMajor === 'すべて' ? new Set(minorsForCurrentMajor()) : new Set();
 }
 
 function buildMinorChips() {
@@ -198,7 +199,7 @@ let embedObserver = null;
 
 function getFilteredSortedPosts() {
   const filtered = ALL_POSTS.filter(p =>
-    (currentMajor === 'すべて' || p.major === currentMajor) && activeMinors.has(p.minor)
+    currentMajor === 'すべて' ? true : (p.major === currentMajor && activeMinors.has(p.minor))
   );
   filtered.sort((a, b) => {
     if (!a.date && !b.date) return 0;
@@ -316,7 +317,9 @@ function mountTwitterEmbed(container, url) {
   waitForTwttr()
     .then(twttr => {
       container.innerHTML = '';
-      return twttr.widgets.createTweet(idMatch[1], container, {});
+      // conversation: 'none' を指定しないと、リプライの場合に返信先のツイートも
+      // 自動で埋め込まれてしまい、スレッド表示で同じツイートが二重に見えてしまう。
+      return twttr.widgets.createTweet(idMatch[1], container, { conversation: 'none' });
     })
     .then(el => {
       // createTweet はツイートが見つからない/削除済みの場合 undefined を返す
@@ -346,24 +349,27 @@ function onThreadToggle(btn) {
 }
 
 function mountThreadTree(container, nodes) {
-  nodes.forEach(node => {
-    const item = document.createElement('div');
-    item.className = 'thread-item';
-    const mount = document.createElement('div');
-    mount.className = 'embed-mount';
-    mount.innerHTML = '<div class="embed-placeholder">読み込み中…</div>';
-    item.appendChild(mount);
-    mountTwitterEmbed(mount, node.url);
+  nodes.forEach(node => mountThreadNode(container, node));
+}
 
-    const children = node.replies || [];
-    if (children.length) {
-      const childWrap = document.createElement('div');
-      childWrap.className = 'thread-children';
-      mountThreadTree(childWrap, children);
-      item.appendChild(childWrap);
-    }
-    container.appendChild(item);
-  });
+// 分岐していない限り同じ階層（同じ縦線）のまま続ける。分岐している場合だけ
+// 新しく入れ子（.thread-children）を作って枝分かれを表現する。
+function mountThreadNode(container, node) {
+  const mount = document.createElement('div');
+  mount.className = 'embed-mount';
+  mount.innerHTML = '<div class="embed-placeholder">読み込み中…</div>';
+  container.appendChild(mount);
+  mountTwitterEmbed(mount, node.url);
+
+  const children = node.replies || [];
+  if (children.length === 1) {
+    mountThreadNode(container, children[0]);
+  } else if (children.length > 1) {
+    const childWrap = document.createElement('div');
+    childWrap.className = 'thread-children';
+    children.forEach(child => mountThreadNode(childWrap, child));
+    container.appendChild(childWrap);
+  }
 }
 
 /* ---- Bluesky ---- */
