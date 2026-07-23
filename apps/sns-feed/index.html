@@ -295,37 +295,51 @@ function ensureTwitterWidget() {
   document.body.appendChild(s);
 }
 
-function waitForTwttr() {
-  return new Promise(resolve => {
-    (function check() {
-      if (window.twttr && window.twttr.ready) window.twttr.ready(() => resolve(window.twttr));
-      else setTimeout(check, 300);
-    })();
-  });
+function runTwitterWidgets(container) {
+  if (window.twttr && window.twttr.ready) {
+    window.twttr.ready(t => t.widgets.load(container));
+  } else {
+    setTimeout(() => runTwitterWidgets(container), 300);
+  }
 }
 
 function twitterFallback(url) {
   return `<div class="embed-placeholder">投稿を読み込めませんでした（<a href="${escapeAttr(url)}" target="_blank" style="color:var(--accent)">投稿を開く ↗</a>）</div>`;
 }
 
-function mountTwitterEmbed(container, url) {
+// createTweet()（ウィジェットAPI）はツイートが見つからない場合でもiframe内に
+// Xの「Not found」画面を表示するだけで、外側のJSからは失敗を検知できない
+// （iframeはクロスオリジンで中身を読めない）。そのため、まず oEmbed REST API
+// （publish.twitter.com/oembed）にfetchし、HTTPステータスで存在確認をしてから
+// widgets.jsで実際の埋め込みに変換する（Blueskyの oEmbed 判定と同じ方式）。
+async function fetchTwitterOEmbed(url) {
+  const cacheKey = 'x-oembed:' + url;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    if (cached === '__FAILED__') throw new Error('cached failure');
+    return cached;
+  }
+  // hide_thread=true でリプライ先ツイートの自動表示を抑止する（二重表示防止）
+  const res = await fetch('https://publish.twitter.com/oembed?url=' + encodeURIComponent(url) + '&hide_thread=true&dnt=true');
+  if (!res.ok) {
+    localStorage.setItem(cacheKey, '__FAILED__');
+    throw new Error('oEmbed fetch failed: ' + res.status);
+  }
+  const data = await res.json();
+  localStorage.setItem(cacheKey, data.html);
+  return data.html;
+}
+
+async function mountTwitterEmbed(container, url) {
   ensureTwitterWidget();
   container.innerHTML = '<div class="embed-placeholder">読み込み中…</div>';
-  const idMatch = url.match(/status\/(\d+)/);
-  if (!idMatch) { container.innerHTML = twitterFallback(url); return; }
-
-  waitForTwttr()
-    .then(twttr => {
-      container.innerHTML = '';
-      // conversation: 'none' を指定しないと、リプライの場合に返信先のツイートも
-      // 自動で埋め込まれてしまい、スレッド表示で同じツイートが二重に見えてしまう。
-      return twttr.widgets.createTweet(idMatch[1], container, { conversation: 'none' });
-    })
-    .then(el => {
-      // createTweet はツイートが見つからない/削除済みの場合 undefined を返す
-      if (!el) container.innerHTML = twitterFallback(url);
-    })
-    .catch(() => { container.innerHTML = twitterFallback(url); });
+  try {
+    const html = await fetchTwitterOEmbed(url);
+    container.innerHTML = html;
+    runTwitterWidgets(container);
+  } catch (e) {
+    container.innerHTML = twitterFallback(url);
+  }
 }
 
 /* ---- X スレッド（post.json の replies を使用。分岐がある場合は入れ子で表示） ---- */
