@@ -1,14 +1,17 @@
 #!/usr/bin/env node
-// post.csv の空欄の「スレッドURL」を、apps/sns-feed 直下の tweets*.js（Twitterアーカイブの
+// post.json の空の「replies」を、apps/sns-feed 直下の tweets*.js（Twitterアーカイブの
 // ツイートエクスポート）から自動で復元して埋める。
 //
-// post.csv の各行の URL が tweets.js 内のツイートと一致した場合、そのツイートに対する
-// 自分自身への自己リプライ（スレッド continuation）を id_str / in_reply_to_status_id_str の
-// 親子関係から辿り、URL 自身を先頭にした続きのツイートURLの列を「;」区切りでセットする。
-// （分岐している場合は created_at が最も早いリプライを次の一手として採用する）
+// post.json の各投稿の url が tweets.js 内のツイートと一致した場合、そのツイートへの
+// 自己リプライ（自分自身への返信）を id_str / in_reply_to_status_id_str の親子関係
+// （tweets.js に明示的に記録されている実データ）から辿り、ツリー構造
+// （{ url, date, replies: [...] }の入れ子）として replies に書き込む。
+// 1つのツイートに複数の自己リプライ（分岐）がある場合は、そのすべてを replies の
+// 配列要素として保持する（1本の鎖に潰さない）。時間差による足切りは行わない
+// （in_reply_to_status_id_str が指す関係をそのままツリーとして採用する）。
 //
 // 使い方: node apps/sns-feed/scripts/fill-threads.mjs [--force]
-//   --force を付けると、既に値が入っているスレッドURLも再計算して上書きする。
+//   --force を付けると、既に replies が入っている投稿も再計算して上書きする。
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { glob } from 'node:fs/promises';
@@ -17,45 +20,11 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ARCHIVE_DIR = path.join(__dirname, '..');
-const CSV_PATH = path.join(__dirname, '..', 'post.csv');
+const JSON_PATH = path.join(__dirname, '..', 'post.json');
 const FORCE = process.argv.includes('--force');
 
-// ---- 簡易CSVパーサ/シリアライザ（RFC4180準拠、外部依存なし。fill-dates.mjs と同一実装） ----
-function parseCSV(text) {
-  const rows = [];
-  let row = [];
-  let field = '';
-  let inQuotes = false;
-  const normalized = text.replace(/\r\n/g, '\n');
-  for (let i = 0; i < normalized.length; i++) {
-    const ch = normalized[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (normalized[i + 1] === '"') { field += '"'; i++; }
-        else inQuotes = false;
-      } else field += ch;
-    } else if (ch === '"') {
-      inQuotes = true;
-    } else if (ch === ',') {
-      row.push(field); field = '';
-    } else if (ch === '\n') {
-      row.push(field); field = '';
-      rows.push(row); row = [];
-    } else {
-      field += ch;
-    }
-  }
-  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
-  return rows.filter(r => !(r.length === 1 && r[0] === ''));
-}
-
-function serializeField(value) {
-  if (/[",\n]/.test(value)) return '"' + value.replace(/"/g, '""') + '"';
-  return value;
-}
-
-function serializeCSV(rows) {
-  return rows.map(r => r.map(serializeField).join(',')).join('\n') + '\n';
+function toDateString(date) {
+  return date.toISOString().slice(0, 10);
 }
 
 // ---- tweets*.js（Twitterアーカイブ）の読み込み ----
@@ -96,7 +65,7 @@ if (!screenName) {
 }
 
 const idToTweet = new Map(tweets.map(t => [t.id_str, t]));
-const childrenOf = new Map(); // parentId -> [childId, ...]
+const childrenOf = new Map(); // parentId -> [childId, ...]（created_at昇順）
 for (const t of tweets) {
   const parent = t.in_reply_to_status_id_str;
   if (!parent || !idToTweet.has(parent)) continue;
@@ -111,73 +80,69 @@ function tweetUrl(id) {
   return `https://x.com/${screenName}/status/${id}`;
 }
 
-// 自己リプライは「一連のスレッドとして書いたもの」とは限らない（数日〜数ヶ月後に自分の
-// 古い投稿へ返信しただけのケースもある）。そのため、直前のツイートから一定時間以内に
-// 投稿された自己リプライだけを「スレッドの続き」とみなして辿る。
-const MAX_GAP_MS = 60 * 60 * 1000; // 1時間
+// parentId への自己リプライ（in_reply_to_status_id_str が指す実データ）を、
+// すべて再帰的にツリー化する。分岐（同じツイートへの複数の自己リプライ）は
+// すべて replies の配列要素として保持する。
+function buildReplyTree(parentId, visited) {
+  const children = childrenOf.get(parentId) || [];
+  const nodes = [];
+  for (const childId of children) {
+    if (visited.has(childId)) continue; // 循環防止
 
-function buildThreadUrls(startUrl, startId) {
-  const chain = [startUrl];
-  const visited = new Set([startId]);
-  let cur = startId;
-  while (childrenOf.has(cur)) {
-    const next = childrenOf.get(cur)[0];
-    if (visited.has(next)) break; // 循環防止
-
-    const gap = new Date(idToTweet.get(next).created_at) - new Date(idToTweet.get(cur).created_at);
-    if (gap > MAX_GAP_MS) break; // 間隔が空きすぎている＝別の会話とみなして打ち切り
-
-    chain.push(tweetUrl(next));
-    visited.add(next);
-    cur = next;
+    const nextVisited = new Set(visited);
+    nextVisited.add(childId);
+    nodes.push({
+      url: tweetUrl(childId),
+      date: toDateString(new Date(idToTweet.get(childId).created_at)),
+      replies: buildReplyTree(childId, nextVisited),
+    });
   }
-  return chain;
+  return nodes;
 }
 
-const raw = await readFile(CSV_PATH, 'utf-8');
-const text = raw.replace(/^﻿/, '');
-const rows = parseCSV(text);
-if (rows.length === 0) {
-  console.error('post.csv が空です');
+const raw = await readFile(JSON_PATH, 'utf-8');
+const posts = JSON.parse(raw);
+if (!Array.isArray(posts)) {
+  console.error('post.json の内容が配列ではありません');
   process.exit(1);
 }
 
-const header = rows[0];
-const urlIdx = header.indexOf('URL');
-const threadIdx = header.indexOf('スレッドURL');
-if (urlIdx === -1 || threadIdx === -1) {
-  console.error('post.csv のヘッダーに URL / スレッドURL 列が見つかりません');
-  process.exit(1);
-}
+let filled = 0, skippedExisting = 0, skippedNotFound = 0, skippedNoThread = 0, skippedNotX = 0;
 
-let filled = 0, skippedExisting = 0, skippedNotFound = 0, skippedNoThread = 0;
-
-for (let i = 1; i < rows.length; i++) {
-  const row = rows[i];
-  const url = (row[urlIdx] || '').trim();
+for (const post of posts) {
+  const url = (post.url || '').trim();
   if (!url) continue;
 
-  const existing = (row[threadIdx] || '').trim();
-  if (existing && !FORCE) { skippedExisting++; continue; }
-
   const m = url.match(/(?:x\.com|twitter\.com)\/[^/]+\/status\/(\d+)/);
-  if (!m || !idToTweet.has(m[1])) { skippedNotFound++; continue; }
+  if (!m) { skippedNotX++; continue; } // Bluesky等はスレッドをライブ判定するため対象外
 
-  const chain = buildThreadUrls(url, m[1]);
-  if (chain.length <= 1) {
-    if (FORCE && existing) row[threadIdx] = ''; // 再計算の結果「続きなし」と分かったので古い値をクリア
+  const hasExisting = Array.isArray(post.replies) && post.replies.length > 0;
+  if (hasExisting && !FORCE) { skippedExisting++; continue; }
+
+  if (!idToTweet.has(m[1])) { skippedNotFound++; continue; }
+
+  const tree = buildReplyTree(m[1], new Set([m[1]]));
+
+  if (tree.length === 0) {
+    if (FORCE && hasExisting) post.replies = []; // 再計算の結果「続きなし」と分かったので古い値をクリア
     skippedNoThread++;
     continue;
   }
 
-  row[threadIdx] = chain.join(';');
+  post.replies = tree;
   filled++;
 }
 
-await writeFile(CSV_PATH, '﻿' + serializeCSV(rows), 'utf-8');
+await writeFile(JSON_PATH, JSON.stringify(posts, null, 2) + '\n', 'utf-8');
+
+function countNodes(nodes) {
+  return nodes.reduce((sum, n) => sum + 1 + countNodes(n.replies || []), 0);
+}
+const totalNodes = posts.reduce((sum, p) => sum + countNodes(p.replies || []), 0);
 
 console.log(`推定スクリーンネーム: ${screenName}`);
-console.log(`補完: ${filled}件`);
-console.log(`スキップ（既にスレッドURLあり）: ${skippedExisting}件`);
+console.log(`補完: ${filled}件（ツリー内の総ツイート数: ${totalNodes}件）`);
+console.log(`スキップ（既にreplies あり）: ${skippedExisting}件`);
+console.log(`スキップ（X以外の投稿）: ${skippedNotX}件`);
 console.log(`スキップ（アーカイブに該当ツイートなし）: ${skippedNotFound}件`);
 console.log(`スキップ（続きのツイートなし）: ${skippedNoThread}件`);

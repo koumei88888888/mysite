@@ -1,21 +1,21 @@
 #!/usr/bin/env node
-// post.csv の空欄の「投稿日」と「スレッド投稿日」を、投稿URLから完全オフラインで復元して埋める。
+// post.json の空欄の「date」を、投稿URLから完全オフラインで復元して埋める。
 // X: Snowflake ID (status ID) にミリ秒精度のタイムスタンプが符号化されている。
 // Bluesky: 投稿レコードキー(rkey)は AT Protocol の TID で、マイクロ秒精度のタイムスタンプが符号化されている。
 // どちらもAPI通信・認証なしでデコードできる。
 //
-// 「スレッド投稿日」は「スレッドURL」（;区切り）の各URLに対応する日付を、同じ並び・同じ区切りで
-// 書き込む列（先頭は投稿日と同じ日付になる）。
+// スレッド内の各ツイートの date は fill-threads.mjs が tweets.js の created_at から
+// 直接埋めるため、このスクリプトはトップレベルの date のみを対象にする。
 //
 // 使い方: node apps/sns-feed/scripts/fill-dates.mjs [--force]
-//   --force を付けると、既に値が入っている投稿日/スレッド投稿日も再計算して上書きする。
+//   --force を付けると、既に値が入っている date も再計算して上書きする。
 
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CSV_PATH = path.join(__dirname, '..', 'post.csv');
+const JSON_PATH = path.join(__dirname, '..', 'post.json');
 const FORCE = process.argv.includes('--force');
 
 const TWITTER_EPOCH_MS = 1288834974657n;
@@ -51,126 +51,40 @@ function toDateString(date) {
   return date.toISOString().slice(0, 10);
 }
 
-// ---- 簡易CSVパーサ/シリアライザ（RFC4180準拠、外部依存なし） ----
-function parseCSV(text) {
-  const rows = [];
-  let row = [];
-  let field = '';
-  let inQuotes = false;
-  const normalized = text.replace(/\r\n/g, '\n');
-  for (let i = 0; i < normalized.length; i++) {
-    const ch = normalized[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (normalized[i + 1] === '"') { field += '"'; i++; }
-        else inQuotes = false;
-      } else field += ch;
-    } else if (ch === '"') {
-      inQuotes = true;
-    } else if (ch === ',') {
-      row.push(field); field = '';
-    } else if (ch === '\n') {
-      row.push(field); field = '';
-      rows.push(row); row = [];
-    } else {
-      field += ch;
-    }
-  }
-  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
-  return rows.filter(r => !(r.length === 1 && r[0] === ''));
-}
-
-function serializeField(value) {
-  if (/[",\n]/.test(value)) return '"' + value.replace(/"/g, '""') + '"';
-  return value;
-}
-
-function serializeCSV(rows) {
-  return rows.map(r => r.map(serializeField).join(',')).join('\n') + '\n';
-}
-
 // ---- メイン処理 ----
-const raw = await readFile(CSV_PATH, 'utf-8');
-const text = raw.replace(/^﻿/, '');
-const rows = parseCSV(text);
-if (rows.length === 0) {
-  console.error('post.csv が空です');
-  process.exit(1);
-}
-
-const header = rows[0];
-const urlIdx = header.indexOf('URL');
-const dateIdx = header.indexOf('投稿日');
-const threadUrlIdx = header.indexOf('スレッドURL');
-const threadDateIdx = header.indexOf('スレッド投稿日');
-if (urlIdx === -1 || dateIdx === -1) {
-  console.error('post.csv のヘッダーに URL / 投稿日 列が見つかりません');
+const raw = await readFile(JSON_PATH, 'utf-8');
+const posts = JSON.parse(raw);
+if (!Array.isArray(posts)) {
+  console.error('post.json の内容が配列ではありません');
   process.exit(1);
 }
 
 let filled = 0, skippedExisting = 0, skippedUnparsable = 0;
 const unparsableUrls = [];
 
-for (let i = 1; i < rows.length; i++) {
-  const row = rows[i];
-  const url = (row[urlIdx] || '').trim();
+for (const post of posts) {
+  const url = (post.url || '').trim();
   if (!url) continue;
 
-  const existing = (row[dateIdx] || '').trim();
-  if (!existing || FORCE) {
-    const date = resolvePostDate(url);
-    if (!date || Number.isNaN(date.getTime())) {
-      skippedUnparsable++;
-      unparsableUrls.push(url);
-    } else {
-      row[dateIdx] = toDateString(date);
-      filled++;
-    }
-  } else {
-    skippedExisting++;
+  const existing = (post.date || '').trim();
+  if (existing && !FORCE) { skippedExisting++; continue; }
+
+  const date = resolvePostDate(url);
+  if (!date || Number.isNaN(date.getTime())) {
+    skippedUnparsable++;
+    unparsableUrls.push(url);
+    continue;
   }
+
+  post.date = toDateString(date);
+  filled++;
 }
 
-let threadFilled = 0, threadSkippedExisting = 0, threadSkippedUnparsable = 0;
+await writeFile(JSON_PATH, JSON.stringify(posts, null, 2) + '\n', 'utf-8');
 
-if (threadUrlIdx !== -1 && threadDateIdx !== -1) {
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    const threadUrlsRaw = (row[threadUrlIdx] || '').trim();
-    const existing = (row[threadDateIdx] || '').trim();
-    if (!threadUrlsRaw) {
-      if (FORCE && existing) row[threadDateIdx] = ''; // スレッドURLが消えているので古い日付もクリア
-      continue;
-    }
-
-    if (existing && !FORCE) { threadSkippedExisting++; continue; }
-
-    const urls = threadUrlsRaw.split(';').map(s => s.trim()).filter(Boolean);
-    const dates = urls.map(u => {
-      const date = resolvePostDate(u);
-      if (!date || Number.isNaN(date.getTime())) {
-        threadSkippedUnparsable++;
-        return '';
-      }
-      return toDateString(date);
-    });
-    row[threadDateIdx] = dates.join(';');
-    threadFilled++;
-  }
-}
-
-await writeFile(CSV_PATH, '﻿' + serializeCSV(rows), 'utf-8');
-
-console.log(`投稿日 補完: ${filled}件`);
-console.log(`投稿日 スキップ（既に値あり）: ${skippedExisting}件`);
+console.log(`補完: ${filled}件`);
+console.log(`スキップ（既に値あり）: ${skippedExisting}件`);
 if (skippedUnparsable > 0) {
-  console.log(`投稿日 スキップ（URLを解析できず）: ${skippedUnparsable}件`);
+  console.log(`スキップ（URLを解析できず）: ${skippedUnparsable}件`);
   unparsableUrls.forEach(u => console.log(`  - ${u}`));
-}
-if (threadUrlIdx !== -1 && threadDateIdx !== -1) {
-  console.log(`スレッド投稿日 補完: ${threadFilled}行`);
-  console.log(`スレッド投稿日 スキップ（既に値あり）: ${threadSkippedExisting}行`);
-  if (threadSkippedUnparsable > 0) {
-    console.log(`スレッド投稿日 内で解析できなかったURL: ${threadSkippedUnparsable}件`);
-  }
 }

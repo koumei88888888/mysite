@@ -52,13 +52,15 @@
   .embed-mount { min-height: 90px; display: flex; align-items: center; justify-content: center; }
   .embed-placeholder { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); padding: 2rem 0; }
   .embed-mount iframe { max-width: 100%; }
-  .twitter-tweet, .bluesky-embed { margin: 0 auto !important; }
+  .bluesky-embed { margin: 0 auto !important; }
 
   .thread-toggle { margin-top: 10px; font-family: var(--font-mono); font-size: 12px; color: var(--accent); background: rgba(124,92,255,0.08); border: 1px dashed rgba(124,92,255,0.4); border-radius: 8px; padding: 8px 12px; cursor: pointer; width: 100%; text-align: left; transition: background 0.15s; }
   .thread-toggle:hover { background: rgba(124,92,255,0.16); }
   .thread-body { margin-top: 12px; display: none; flex-direction: column; gap: 12px; border-left: 2px solid var(--border2); padding-left: 12px; }
   .thread-body.open { display: flex; }
   .thread-body .embed-mount { min-height: 60px; }
+  .thread-item { display: flex; flex-direction: column; gap: 8px; }
+  .thread-children { margin-top: 8px; display: flex; flex-direction: column; gap: 12px; border-left: 2px solid var(--border2); padding-left: 12px; }
 
   .empty-state, .load-error { font-family: var(--font-mono); font-size: 13px; color: var(--muted); text-align: center; padding: 3rem 0; }
 </style>
@@ -89,30 +91,12 @@
 
 <script>
 /* ============================================================
- * データ読込・CSVパース
+ * データ読込
  * ============================================================ */
 let ALL_POSTS = [];
 let currentMajor = 'すべて';
 let activeMinors = new Set();
 let sortOrder = 'desc'; // 'desc' = 新しい順, 'asc' = 古い順
-
-function parseCSV(text) {
-  const rows = [];
-  let row = [], field = '', inQuotes = false;
-  const normalized = text.replace(/^﻿/, '').replace(/\r\n/g, '\n');
-  for (let i = 0; i < normalized.length; i++) {
-    const ch = normalized[i];
-    if (inQuotes) {
-      if (ch === '"') { if (normalized[i + 1] === '"') { field += '"'; i++; } else inQuotes = false; }
-      else field += ch;
-    } else if (ch === '"') { inQuotes = true; }
-    else if (ch === ',') { row.push(field); field = ''; }
-    else if (ch === '\n') { row.push(field); field = ''; rows.push(row); row = []; }
-    else { field += ch; }
-  }
-  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
-  return rows.filter(r => !(r.length === 1 && r[0].trim() === ''));
-}
 
 function detectPlatform(url) {
   if (/bsky\.app/.test(url)) return 'bluesky';
@@ -123,38 +107,28 @@ function detectPlatform(url) {
 async function loadPosts() {
   const listEl = document.getElementById('post-list');
   try {
-    const text = await fetch('./post.csv').then(r => {
+    const posts = await fetch('./post.json').then(r => {
       if (!r.ok) throw new Error(r.status);
-      return r.text();
+      return r.json();
     });
-    const rows = parseCSV(text);
-    const header = rows[0] || [];
-    const idx = {
-      url: header.indexOf('URL'),
-      major: header.indexOf('大ジャンル'),
-      minor: header.indexOf('小ジャンル'),
-      date: header.indexOf('投稿日'),
-      thread: header.indexOf('スレッドURL'),
-    };
-    ALL_POSTS = rows.slice(1)
-      .filter(r => (r[idx.url] || '').trim())
-      .map(r => {
-        const url = r[idx.url].trim();
-        const threadRaw = idx.thread !== -1 ? (r[idx.thread] || '').trim() : '';
+    ALL_POSTS = posts
+      .filter(p => (p.url || '').trim())
+      .map(p => {
+        const url = p.url.trim();
         return {
           url,
           platform: detectPlatform(url),
-          major: (r[idx.major] || '未分類').trim() || '未分類',
-          minor: (r[idx.minor] || '未分類').trim() || '未分類',
-          date: (r[idx.date] || '').trim(),
-          threadUrls: threadRaw ? threadRaw.split(';').map(s => s.trim()).filter(Boolean) : [],
+          major: (p.major || '未分類').trim() || '未分類',
+          minor: (p.minor || '未分類').trim() || '未分類',
+          date: (p.date || '').trim(),
+          replies: Array.isArray(p.replies) ? p.replies : [],
         };
       })
       .filter(p => p.platform);
     buildMajorTabs();
     render();
   } catch (e) {
-    listEl.innerHTML = `<div class="load-error">post.csv の読み込みに失敗しました: ${e.message}<br>ローカルサーバー経由（例: npx serve）で開いてください。</div>`;
+    listEl.innerHTML = `<div class="load-error">post.json の読み込みに失敗しました: ${e.message}<br>ローカルサーバー経由（例: npx serve）で開いてください。</div>`;
   }
 }
 
@@ -265,9 +239,14 @@ function render() {
   });
 }
 
+function countThreadNodes(nodes) {
+  return (nodes || []).reduce((sum, n) => sum + 1 + countThreadNodes(n.replies), 0);
+}
+
 function renderCard(p, i) {
   const platformIcon = p.platform === 'x' ? '𝕏' : '🦋';
-  const hasXThread = p.platform === 'x' && p.threadUrls.length > 1;
+  const hasXThread = p.platform === 'x' && p.replies.length > 0;
+  const nodeCount = hasXThread ? countThreadNodes(p.replies) : 0;
   return `
     <div class="post-card" data-index="${i}">
       <div class="post-meta">
@@ -278,7 +257,7 @@ function renderCard(p, i) {
       <div class="embed-mount" data-role="main" data-url="${escapeAttr(p.url)}" data-platform="${p.platform}">
         <div class="embed-placeholder">読み込み中…</div>
       </div>
-      ${hasXThread ? `<button class="thread-toggle" data-urls="${escapeAttr(JSON.stringify(p.threadUrls.slice(1)))}">▶ ツリーを表示 (${p.threadUrls.length - 1}件)</button>
+      ${hasXThread ? `<button class="thread-toggle" data-tree="${escapeAttr(JSON.stringify(p.replies))}">▶ ツリーを表示 (${nodeCount}件)</button>
       <div class="thread-body"></div>` : ''}
       ${p.platform === 'bluesky' ? `<div class="thread-slot" data-url="${escapeAttr(p.url)}"></div>` : ''}
     </div>`;
@@ -315,27 +294,38 @@ function ensureTwitterWidget() {
   document.body.appendChild(s);
 }
 
+function waitForTwttr() {
+  return new Promise(resolve => {
+    (function check() {
+      if (window.twttr && window.twttr.ready) window.twttr.ready(() => resolve(window.twttr));
+      else setTimeout(check, 300);
+    })();
+  });
+}
+
+function twitterFallback(url) {
+  return `<div class="embed-placeholder">投稿を読み込めませんでした（<a href="${escapeAttr(url)}" target="_blank" style="color:var(--accent)">投稿を開く ↗</a>）</div>`;
+}
+
 function mountTwitterEmbed(container, url) {
   ensureTwitterWidget();
-  container.innerHTML = '';
-  const bq = document.createElement('blockquote');
-  bq.className = 'twitter-tweet';
-  const a = document.createElement('a');
-  a.href = url;
-  bq.appendChild(a);
-  container.appendChild(bq);
-  runTwitterWidgets(container);
+  container.innerHTML = '<div class="embed-placeholder">読み込み中…</div>';
+  const idMatch = url.match(/status\/(\d+)/);
+  if (!idMatch) { container.innerHTML = twitterFallback(url); return; }
+
+  waitForTwttr()
+    .then(twttr => {
+      container.innerHTML = '';
+      return twttr.widgets.createTweet(idMatch[1], container, {});
+    })
+    .then(el => {
+      // createTweet はツイートが見つからない/削除済みの場合 undefined を返す
+      if (!el) container.innerHTML = twitterFallback(url);
+    })
+    .catch(() => { container.innerHTML = twitterFallback(url); });
 }
 
-function runTwitterWidgets(container) {
-  if (window.twttr && window.twttr.ready) {
-    window.twttr.ready(t => t.widgets.load(container));
-  } else {
-    setTimeout(() => runTwitterWidgets(container), 300);
-  }
-}
-
-/* ---- X スレッド（post.csv の スレッドURL 列を使用） ---- */
+/* ---- X スレッド（post.json の replies を使用。分岐がある場合は入れ子で表示） ---- */
 function onThreadToggle(btn) {
   const card = btn.closest('.post-card');
   const body = card.querySelector('.thread-body');
@@ -348,17 +338,32 @@ function onThreadToggle(btn) {
   }
   if (!body.dataset.mounted) {
     body.dataset.mounted = '1';
-    const urls = JSON.parse(btn.dataset.urls || '[]');
-    urls.forEach(u => {
-      const mount = document.createElement('div');
-      mount.className = 'embed-mount';
-      mount.innerHTML = '<div class="embed-placeholder">読み込み中…</div>';
-      body.appendChild(mount);
-      mountTwitterEmbed(mount, u);
-    });
+    const tree = JSON.parse(btn.dataset.tree || '[]');
+    mountThreadTree(body, tree);
   }
   body.classList.add('open');
   btn.textContent = '▼ ツリーを閉じる';
+}
+
+function mountThreadTree(container, nodes) {
+  nodes.forEach(node => {
+    const item = document.createElement('div');
+    item.className = 'thread-item';
+    const mount = document.createElement('div');
+    mount.className = 'embed-mount';
+    mount.innerHTML = '<div class="embed-placeholder">読み込み中…</div>';
+    item.appendChild(mount);
+    mountTwitterEmbed(mount, node.url);
+
+    const children = node.replies || [];
+    if (children.length) {
+      const childWrap = document.createElement('div');
+      childWrap.className = 'thread-children';
+      mountThreadTree(childWrap, children);
+      item.appendChild(childWrap);
+    }
+    container.appendChild(item);
+  });
 }
 
 /* ---- Bluesky ---- */
