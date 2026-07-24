@@ -49,12 +49,9 @@
   .post-date { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); margin-left: auto; }
   .platform-icon { font-size: 13px; }
 
-  .embed-mount { min-height: 90px; display: flex; align-items: center; justify-content: center; }
   .embed-placeholder { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); padding: 2rem 0; }
-  .embed-mount iframe { max-width: 100%; }
-  .bluesky-embed { margin: 0 auto !important; }
 
-  /* --- X投稿の自前カード（本文 + メディア。tweets.jsアーカイブ由来） --- */
+  /* --- 投稿カードの自前描画（本文 + メディア。ビルド時にpost.jsonへ抽出済み） --- */
   .tweet-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
   .tweet-text { font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
   .tweet-text + .tweet-media { margin-top: 10px; }
@@ -131,6 +128,8 @@ async function loadPosts() {
           date: (p.date || '').trim(),
           text: p.text || '',
           media: Array.isArray(p.media) ? p.media : [],
+          // X/Bluesky共通: 本文・メディア・スレッド(自己リプライのツリー)は
+          // どちらもビルド時にpost.jsonへ焼き込み済みで、ライブ取得はしない。
           replies: Array.isArray(p.replies) ? p.replies : [],
         };
       })
@@ -206,8 +205,6 @@ function updateSortButton() {
 /* ============================================================
  * 描画
  * ============================================================ */
-let embedObserver = null;
-
 function getFilteredSortedPosts() {
   const filtered = ALL_POSTS.filter(p =>
     currentMajor === 'すべて' ? true : (p.major === currentMajor && activeMinors.has(p.minor))
@@ -233,19 +230,8 @@ function render() {
     return;
   }
 
-  if (embedObserver) embedObserver.disconnect();
-  embedObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        mountEmbed(entry.target);
-        embedObserver.unobserve(entry.target);
-      }
-    });
-  }, { rootMargin: '300px 0px' });
-
   listEl.innerHTML = posts.map((p, i) => renderCard(p, i)).join('');
 
-  listEl.querySelectorAll('.embed-mount[data-role="main"]').forEach(el => embedObserver.observe(el));
   listEl.querySelectorAll('.thread-toggle').forEach(btn => {
     btn.addEventListener('click', () => onThreadToggle(btn));
   });
@@ -257,17 +243,12 @@ function countThreadNodes(nodes) {
 
 function renderCard(p, i) {
   const platformIcon = p.platform === 'x' ? '𝕏' : '🦋';
-  const hasXThread = p.platform === 'x' && p.replies.length > 0;
-  const nodeCount = hasXThread ? countThreadNodes(p.replies) : 0;
+  const hasThread = p.replies.length > 0;
+  const nodeCount = hasThread ? countThreadNodes(p.replies) : 0;
 
-  // X投稿は埋め込みAPIを使わず、tweets.jsアーカイブから抽出済みの本文/メディアを
-  // そのまま静的に描画する（センシティブ判定で埋め込み拒否される問題を回避）。
-  // Blueskyは引き続きライブでoEmbed取得する。
-  const mainContent = p.platform === 'x'
-    ? (p.text || p.media.length ? renderTweetCard(p) : xFallback(p.url))
-    : `<div class="embed-mount" data-role="main" data-url="${escapeAttr(p.url)}" data-platform="${p.platform}">
-        <div class="embed-placeholder">読み込み中…</div>
-      </div>`;
+  // X/Bluesky共通: 埋め込みAPIは使わず、ビルド時に抽出済みの本文/メディアを
+  // そのまま静的に描画する（Xはセンシティブ判定で埋め込み拒否されることがあるため回避）。
+  const mainContent = (p.text || p.media.length) ? renderTweetCard(p) : contentFallback(p.url);
 
   return `
     <div class="post-card" data-index="${i}">
@@ -277,14 +258,13 @@ function renderCard(p, i) {
         <span class="post-date"><span class="platform-icon">${platformIcon}</span> ${escapeHtml(p.date || '日付不明')}</span>
       </div>
       ${mainContent}
-      ${hasXThread ? `<button class="thread-toggle" data-tree="${escapeAttr(JSON.stringify(p.replies))}">▶ ツリーを表示 (${nodeCount}件)</button>
+      ${hasThread ? `<button class="thread-toggle" data-tree="${escapeAttr(JSON.stringify(p.replies))}">▶ ツリーを表示 (${nodeCount}件)</button>
       <div class="thread-body"></div>` : ''}
-      ${p.platform === 'bluesky' ? `<div class="thread-slot" data-url="${escapeAttr(p.url)}"></div>` : ''}
     </div>`;
 }
 
-/* ---- X: 自前カード描画（本文 + メディア。tweets.jsアーカイブ由来） ---- */
-function xFallback(url) {
+/* ---- 自前カード描画（本文 + メディア。ビルド時にpost.jsonへ抽出済み） ---- */
+function contentFallback(url) {
   return `<div class="embed-placeholder">本文を読み込めませんでした（<a href="${escapeAttr(url)}" target="_blank" style="color:var(--accent)">投稿を開く ↗</a>）</div>`;
 }
 
@@ -292,6 +272,11 @@ function renderMediaItem(item) {
   if (item.type === 'photo') {
     // クリック/タップで原寸画像を別タブで開けるようにする（画面内は見切れないよう縮小表示）
     return `<a href="${escapeAttr(item.url)}" target="_blank" rel="noopener"><img src="${escapeAttr(item.url)}" loading="lazy" alt=""></a>`;
+  }
+  if (item.type === 'video_external') {
+    // Bluesky動画(HLS)はブラウザで直接再生できないため、サムネイルのみ表示する
+    // （実際の再生はカード下部の「元投稿を開く」から行う）。
+    return `<img src="${escapeAttr(item.poster || '')}" loading="lazy" alt="動画のサムネイル（元投稿を開くと再生できます）">`;
   }
   const loopAttrs = item.type === 'animated_gif' ? ' loop muted autoplay playsinline' : ' controls';
   return `<video src="${escapeAttr(item.url)}" poster="${escapeAttr(item.poster || '')}"${loopAttrs}></video>`;
@@ -306,7 +291,7 @@ function renderTweetCard(node) {
   return `<div class="tweet-card">${textHtml}${mediaHtml}${linkHtml}</div>`;
 }
 
-/* ---- X スレッド（post.json の replies を使用。分岐がある場合は入れ子で表示） ---- */
+/* ---- スレッド（post.json の replies を使用。分岐がある場合は入れ子で表示） ---- */
 function onThreadToggle(btn) {
   const card = btn.closest('.post-card');
   const body = card.querySelector('.thread-body');
@@ -347,137 +332,6 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 function escapeAttr(s) { return escapeHtml(s); }
-
-/* ============================================================
- * 埋め込み（共通マウント処理）
- * ============================================================ */
-function mountEmbed(container) {
-  // ここに到達するのはBlueskyの main embed-mount のみ（Xは静的に描画済み）。
-  const url = container.dataset.url;
-  container.innerHTML = '';
-  mountBlueskyEmbed(container, url).then(() => {
-    const card = container.closest('.post-card');
-    const slot = card ? card.querySelector('.thread-slot') : null;
-    if (slot) setupBlueskyThread(slot, url);
-  });
-}
-
-/* ---- Bluesky ---- */
-function ensureBlueskyEmbedScript() {
-  const s = document.createElement('script');
-  s.async = true;
-  s.src = 'https://embed.bsky.app/static/embed.js';
-  document.body.appendChild(s);
-}
-
-async function fetchBlueskyOEmbed(url) {
-  const cacheKey = 'bsky-oembed:' + url;
-  const cached = localStorage.getItem(cacheKey);
-  if (cached) return cached;
-  const res = await fetch('https://embed.bsky.app/oembed?url=' + encodeURIComponent(url) + '&format=json');
-  if (!res.ok) throw new Error('oEmbed fetch failed: ' + res.status);
-  const data = await res.json();
-  localStorage.setItem(cacheKey, data.html);
-  return data.html;
-}
-
-async function mountBlueskyEmbed(container, url) {
-  try {
-    const html = await fetchBlueskyOEmbed(url);
-    container.innerHTML = html;
-    ensureBlueskyEmbedScript();
-  } catch (e) {
-    container.innerHTML = `<div class="embed-placeholder">埋め込みを読み込めませんでした（<a href="${escapeAttr(url)}" target="_blank" style="color:var(--accent)">投稿を開く ↗</a>）</div>`;
-  }
-}
-
-/* ---- Bluesky スレッド自動判定（公開APIのみ、認証不要） ---- */
-function parseBlueskyUrl(url) {
-  const m = url.match(/bsky\.app\/profile\/([^/]+)\/post\/([a-zA-Z2-7]+)/);
-  if (!m) return null;
-  return { handle: m[1], rkey: m[2] };
-}
-
-async function resolveDid(handle) {
-  if (handle.startsWith('did:')) return handle;
-  const cacheKey = 'bsky-did:' + handle;
-  const cached = localStorage.getItem(cacheKey);
-  if (cached) return cached;
-  const res = await fetch('https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=' + encodeURIComponent(handle));
-  if (!res.ok) throw new Error('resolveHandle failed');
-  const data = await res.json();
-  localStorage.setItem(cacheKey, data.did);
-  return data.did;
-}
-
-async function fetchThreadChain(url) {
-  const parsed = parseBlueskyUrl(url);
-  if (!parsed) return [];
-  const cacheKey = 'bsky-thread:' + url;
-  const cached = localStorage.getItem(cacheKey);
-  if (cached) return JSON.parse(cached);
-
-  const did = await resolveDid(parsed.handle);
-  const uri = `at://${did}/app.bsky.feed.post/${parsed.rkey}`;
-  const res = await fetch('https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=' + encodeURIComponent(uri) + '&depth=10');
-  if (!res.ok) throw new Error('getPostThread failed');
-  const data = await res.json();
-
-  const rootAuthorDid = data.thread?.post?.author?.did;
-  const chain = [];
-  let node = data.thread;
-  while (node && node.replies && node.replies.length > 0) {
-    const next = node.replies.find(r => r.post && r.post.author && r.post.author.did === rootAuthorDid);
-    if (!next) break;
-    const nUri = next.post.uri; // at://did/app.bsky.feed.post/rkey
-    const nRkey = nUri.split('/').pop();
-    const permalink = `https://bsky.app/profile/${next.post.author.handle || did}/post/${nRkey}`;
-    chain.push(permalink);
-    node = next;
-  }
-  localStorage.setItem(cacheKey, JSON.stringify(chain));
-  return chain;
-}
-
-async function setupBlueskyThread(slot, url) {
-  let chain;
-  try {
-    chain = await fetchThreadChain(url);
-  } catch (e) {
-    return; // スレッド判定に失敗しても単体埋め込みはそのまま表示する
-  }
-  if (!chain.length) return;
-
-  const btn = document.createElement('button');
-  btn.className = 'thread-toggle';
-  btn.textContent = `▶ ツリーを表示 (${chain.length}件)`;
-  const body = document.createElement('div');
-  body.className = 'thread-body';
-
-  btn.addEventListener('click', () => {
-    const isOpen = body.classList.contains('open');
-    if (isOpen) {
-      body.classList.remove('open');
-      btn.textContent = `▶ ツリーを表示 (${chain.length}件)`;
-      return;
-    }
-    if (!body.dataset.mounted) {
-      body.dataset.mounted = '1';
-      chain.forEach(u => {
-        const mount = document.createElement('div');
-        mount.className = 'embed-mount';
-        mount.innerHTML = '<div class="embed-placeholder">読み込み中…</div>';
-        body.appendChild(mount);
-        mountBlueskyEmbed(mount, u);
-      });
-    }
-    body.classList.add('open');
-    btn.textContent = '▼ ツリーを閉じる';
-  });
-
-  slot.appendChild(btn);
-  slot.appendChild(body);
-}
 
 /* ============================================================ */
 loadPosts();

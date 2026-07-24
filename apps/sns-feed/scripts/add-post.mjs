@@ -1,20 +1,23 @@
 #!/usr/bin/env node
 // post.json に投稿を1件だけ追加、または既存の1件だけを更新するスクリプト。
 //
-// [新規追加] URL・大ジャンル・小ジャンルを指定するだけで、投稿日・
-// （Xの場合は）本文・メディア・スレッド（自己リプライのツリー）を
-// tweets*.js アーカイブ / URLから全て自動補完してpost.jsonに追加する。
-//   使い方: node apps/sns-feed/scripts/add-post.mjs <URL> <大ジャンル> <小ジャンル>
+// X・Bluesky共通。URL・大ジャンル・小ジャンルを指定するだけで、投稿日・本文・
+// メディア・スレッド（自己リプライのツリー）を全て自動補完してpost.jsonに追加する。
+// X: tweets*.js アーカイブ（ローカル、非公開）から抽出する。
+// Bluesky: AT Protocolの公開API（認証不要）からその場で取得する。
+// どちらも取得結果をpost.jsonに焼き込むため、WEBページ側は一切ライブ取得しない。
+//
+// [新規追加]
+//   node apps/sns-feed/scripts/add-post.mjs <URL> <大ジャンル> <小ジャンル>
 //
 // [既存の更新／スレッドが後から伸びた時の追従] 同じURLの投稿が既にpost.jsonに
-// あれば、大ジャンル/小ジャンルは指定しない限りそのままに、現在の tweets*.js
-// アーカイブの内容でスレッド・本文・メディア・投稿日を再計算して上書きする。
-// tweets.js を新しいアーカイブ書き出しに差し替えてから実行すれば、後から
-// 増えた自己リプライが自動でツリーに追加される。
-//   使い方: node apps/sns-feed/scripts/add-post.mjs <URL>
+// あれば、大ジャンル/小ジャンルは指定しない限りそのままに、その投稿のスレッド・
+// 本文・メディア・投稿日だけを最新の内容で再計算して上書きする
+// （Xはtweets.jsを新しいアーカイブ書き出しに差し替えてから実行する。Blueskyは
+// 常に最新の投稿状況をその場で取得するので差し替え不要）。
+//   node apps/sns-feed/scripts/add-post.mjs <URL>
 //
 // 大ジャンル/小ジャンルを指定した場合は、既存投稿でもジャンルを上書きする。
-// Bluesky投稿はスレッドをWEBページ側でライブ判定するため、ここでは投稿日のみ扱う。
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { glob } from 'node:fs/promises';
@@ -32,24 +35,6 @@ if (!urlArg) {
   console.error('  新規追加: node apps/sns-feed/scripts/add-post.mjs <URL> <大ジャンル> <小ジャンル>');
   console.error('  既存更新: node apps/sns-feed/scripts/add-post.mjs <URL>');
   process.exit(1);
-}
-
-const TWITTER_EPOCH_MS = 1288834974657n;
-const TID_CHARSET = '234567abcdefghijklmnopqrstuvwxyz';
-
-function tweetIdToDate(id) {
-  const ms = (BigInt(id) >> 22n) + TWITTER_EPOCH_MS;
-  return new Date(Number(ms));
-}
-
-function decodeTID(tid) {
-  let val = 0n;
-  for (const ch of tid) {
-    const idx = TID_CHARSET.indexOf(ch);
-    if (idx === -1) return null;
-    val = (val << 5n) | BigInt(idx);
-  }
-  return new Date(Number((val >> 10n) / 1000n));
 }
 
 function toDateString(date) {
@@ -120,6 +105,66 @@ function extractContent(tweet) {
     if (m.url) text = text.split(m.url).join('');
   }
   return { text: text.trim(), media };
+}
+
+// ---- Bluesky（AT Protocol公開API。認証不要） ----
+function parseBlueskyUrl(url) {
+  const m = url.match(/bsky\.app\/profile\/([^/]+)\/post\/([a-zA-Z2-7]+)/);
+  return m ? { handle: m[1], rkey: m[2] } : null;
+}
+
+async function resolveDid(handle) {
+  if (handle.startsWith('did:')) return handle;
+  const res = await fetch('https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=' + encodeURIComponent(handle));
+  if (!res.ok) throw new Error('resolveHandle failed: ' + res.status);
+  const data = await res.json();
+  return data.did;
+}
+
+// 投稿のembedから表示用メディア一覧を抜き出す（画像・動画・引用+メディア）。
+function extractBskyMedia(embed) {
+  if (!embed) return [];
+  if (embed.$type === 'app.bsky.embed.images#view') {
+    return embed.images.map(img => ({ type: 'photo', url: img.fullsize }));
+  }
+  if (embed.$type === 'app.bsky.embed.video#view') {
+    // 動画はHLS(m3u8)配信でブラウザによって再生できないため、サムネイルのみ表示し
+    // 実際の再生はカード下部の「元投稿を開く」リンクに任せる。
+    return [{ type: 'video_external', poster: embed.thumbnail }];
+  }
+  if (embed.$type === 'app.bsky.embed.recordWithMedia#view') {
+    return extractBskyMedia(embed.media);
+  }
+  return [];
+}
+
+function bskyPermalink(post, rootDid) {
+  const rkey = post.uri.split('/').pop();
+  return `https://bsky.app/profile/${post.author.handle || rootDid}/post/${rkey}`;
+}
+
+// threadNode（getPostThreadのレスポンス）から自分自身への返信だけを辿り、
+// Xと同じ形（{ url, date, text, media, replies }の入れ子）のツリーを組み立てる。
+function buildBskyNode(threadNode, rootDid) {
+  const post = threadNode.post;
+  const selfReplies = (threadNode.replies || []).filter(r => r.post && r.post.author && r.post.author.did === rootDid);
+  return {
+    url: bskyPermalink(post, rootDid),
+    date: toDateString(new Date(post.record.createdAt)),
+    text: (post.record.text || '').trim(),
+    media: extractBskyMedia(post.embed),
+    replies: selfReplies.map(r => buildBskyNode(r, rootDid)),
+  };
+}
+
+async function fetchBskyThread(handle, rkey) {
+  const did = await resolveDid(handle);
+  const uri = `at://${did}/app.bsky.feed.post/${rkey}`;
+  const res = await fetch('https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=' + encodeURIComponent(uri) + '&depth=50');
+  if (!res.ok) throw new Error('getPostThread failed: ' + res.status);
+  const data = await res.json();
+  if (!data.thread || !data.thread.post) throw new Error('スレッドが取得できませんでした（投稿が削除・非公開の可能性があります）');
+  return buildBskyNode(data.thread, did);
 }
 
 let idToTweet = new Map();
@@ -214,10 +259,16 @@ if (xId) {
   entry.media = media;
   entry.replies = buildReplyTree(xId, new Set([xId]));
 } else {
-  const bskyMatch = urlArg.match(/bsky\.app\/profile\/[^/]+\/post\/([a-zA-Z2-7]+)/);
-  const date = bskyMatch ? decodeTID(bskyMatch[1]) : null;
-  if (date && !Number.isNaN(date.getTime())) entry.date = toDateString(date);
-  entry.replies = entry.replies || [];
+  const parsed = parseBlueskyUrl(urlArg);
+  if (!parsed) {
+    console.error('Bluesky URLの形式が正しくありません（例: https://bsky.app/profile/handle/post/xxxxx）');
+    process.exit(1);
+  }
+  const node = await fetchBskyThread(parsed.handle, parsed.rkey);
+  entry.date = node.date;
+  entry.text = node.text;
+  entry.media = node.media;
+  entry.replies = node.replies;
 }
 
 await writeFile(JSON_PATH, JSON.stringify(posts, null, 2) + '\n', 'utf-8');
@@ -226,8 +277,8 @@ function countNodes(nodes) {
   return (nodes || []).reduce((sum, n) => sum + 1 + countNodes(n.replies), 0);
 }
 
-console.log(isNew ? '新規追加しました' : '既存の投稿を更新しました（スレッドは現在のアーカイブ内容で再計算）');
+console.log(isNew ? '新規追加しました' : '既存の投稿を更新しました（スレッドは現在のアーカイブ/最新の投稿内容で再計算）');
 console.log(`URL: ${entry.url}`);
 console.log(`大ジャンル: ${entry.major} / 小ジャンル: ${entry.minor}`);
 console.log(`投稿日: ${entry.date}`);
-if (xId) console.log(`スレッド内ツイート数: ${countNodes(entry.replies)}`);
+console.log(`スレッド内投稿数: ${countNodes(entry.replies)}`);
