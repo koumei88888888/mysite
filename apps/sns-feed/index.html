@@ -58,8 +58,11 @@
   .tweet-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
   .tweet-text { font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
   .tweet-text + .tweet-media { margin-top: 10px; }
-  .tweet-media { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 4px; border-radius: 8px; overflow: hidden; }
-  .tweet-media img, .tweet-media video { width: 100%; max-height: 420px; object-fit: cover; display: block; background: #000; }
+  .tweet-media { display: flex; flex-direction: column; gap: 6px; border-radius: 8px; overflow: hidden; }
+  .tweet-media img, .tweet-media video { width: 100%; max-height: 80vh; object-fit: contain; display: block; background: #000; }
+  .tweet-media a { display: block; cursor: zoom-in; }
+  .tweet-link { display: inline-block; margin-top: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--dimmer); text-decoration: none; }
+  .tweet-link:hover { color: var(--accent); }
 
   .thread-toggle { margin-top: 10px; font-family: var(--font-mono); font-size: 12px; color: var(--accent); background: rgba(124,92,255,0.08); border: 1px dashed rgba(124,92,255,0.4); border-radius: 8px; padding: 8px 12px; cursor: pointer; width: 100%; text-align: left; transition: background 0.15s; }
   .thread-toggle:hover { background: rgba(124,92,255,0.16); }
@@ -287,7 +290,8 @@ function xFallback(url) {
 
 function renderMediaItem(item) {
   if (item.type === 'photo') {
-    return `<img src="${escapeAttr(item.url)}" loading="lazy" alt="">`;
+    // クリック/タップで原寸画像を別タブで開けるようにする（画面内は見切れないよう縮小表示）
+    return `<a href="${escapeAttr(item.url)}" target="_blank" rel="noopener"><img src="${escapeAttr(item.url)}" loading="lazy" alt=""></a>`;
   }
   const loopAttrs = item.type === 'animated_gif' ? ' loop muted autoplay playsinline' : ' controls';
   return `<video src="${escapeAttr(item.url)}" poster="${escapeAttr(item.poster || '')}"${loopAttrs}></video>`;
@@ -298,7 +302,8 @@ function renderTweetCard(node) {
   const mediaHtml = (node.media && node.media.length)
     ? `<div class="tweet-media">${node.media.map(renderMediaItem).join('')}</div>`
     : '';
-  return `<div class="tweet-card">${textHtml}${mediaHtml}</div>`;
+  const linkHtml = `<a class="tweet-link" href="${escapeAttr(node.url)}" target="_blank" rel="noopener">元投稿を開く ↗</a>`;
+  return `<div class="tweet-card">${textHtml}${mediaHtml}${linkHtml}</div>`;
 }
 
 /* ---- X スレッド（post.json の replies を使用。分岐がある場合は入れ子で表示） ---- */
