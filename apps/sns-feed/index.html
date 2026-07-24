@@ -54,11 +54,17 @@
   .embed-mount iframe { max-width: 100%; }
   .bluesky-embed { margin: 0 auto !important; }
 
+  /* --- X投稿の自前カード（本文 + メディア。tweets.jsアーカイブ由来） --- */
+  .tweet-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .tweet-text { font-size: 14px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+  .tweet-text + .tweet-media { margin-top: 10px; }
+  .tweet-media { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 4px; border-radius: 8px; overflow: hidden; }
+  .tweet-media img, .tweet-media video { width: 100%; max-height: 420px; object-fit: cover; display: block; background: #000; }
+
   .thread-toggle { margin-top: 10px; font-family: var(--font-mono); font-size: 12px; color: var(--accent); background: rgba(124,92,255,0.08); border: 1px dashed rgba(124,92,255,0.4); border-radius: 8px; padding: 8px 12px; cursor: pointer; width: 100%; text-align: left; transition: background 0.15s; }
   .thread-toggle:hover { background: rgba(124,92,255,0.16); }
   .thread-body { margin-top: 12px; display: none; flex-direction: column; gap: 12px; border-left: 2px solid var(--border2); padding-left: 12px; }
   .thread-body.open { display: flex; }
-  .thread-body .embed-mount { min-height: 60px; }
   .thread-children { margin-top: 8px; display: flex; flex-direction: column; gap: 12px; border-left: 2px solid var(--border2); padding-left: 12px; }
 
   .empty-state, .load-error { font-family: var(--font-mono); font-size: 13px; color: var(--muted); text-align: center; padding: 3rem 0; }
@@ -120,6 +126,8 @@ async function loadPosts() {
           major: (p.major || '未分類').trim() || '未分類',
           minor: (p.minor || '未分類').trim() || '未分類',
           date: (p.date || '').trim(),
+          text: p.text || '',
+          media: Array.isArray(p.media) ? p.media : [],
           replies: Array.isArray(p.replies) ? p.replies : [],
         };
       })
@@ -248,6 +256,16 @@ function renderCard(p, i) {
   const platformIcon = p.platform === 'x' ? '𝕏' : '🦋';
   const hasXThread = p.platform === 'x' && p.replies.length > 0;
   const nodeCount = hasXThread ? countThreadNodes(p.replies) : 0;
+
+  // X投稿は埋め込みAPIを使わず、tweets.jsアーカイブから抽出済みの本文/メディアを
+  // そのまま静的に描画する（センシティブ判定で埋め込み拒否される問題を回避）。
+  // Blueskyは引き続きライブでoEmbed取得する。
+  const mainContent = p.platform === 'x'
+    ? (p.text || p.media.length ? renderTweetCard(p) : xFallback(p.url))
+    : `<div class="embed-mount" data-role="main" data-url="${escapeAttr(p.url)}" data-platform="${p.platform}">
+        <div class="embed-placeholder">読み込み中…</div>
+      </div>`;
+
   return `
     <div class="post-card" data-index="${i}">
       <div class="post-meta">
@@ -255,91 +273,32 @@ function renderCard(p, i) {
         <span class="badge">${escapeHtml(p.minor)}</span>
         <span class="post-date"><span class="platform-icon">${platformIcon}</span> ${escapeHtml(p.date || '日付不明')}</span>
       </div>
-      <div class="embed-mount" data-role="main" data-url="${escapeAttr(p.url)}" data-platform="${p.platform}">
-        <div class="embed-placeholder">読み込み中…</div>
-      </div>
+      ${mainContent}
       ${hasXThread ? `<button class="thread-toggle" data-tree="${escapeAttr(JSON.stringify(p.replies))}">▶ ツリーを表示 (${nodeCount}件)</button>
       <div class="thread-body"></div>` : ''}
       ${p.platform === 'bluesky' ? `<div class="thread-slot" data-url="${escapeAttr(p.url)}"></div>` : ''}
     </div>`;
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-}
-function escapeAttr(s) { return escapeHtml(s); }
-
-/* ============================================================
- * 埋め込み（共通マウント処理）
- * ============================================================ */
-function mountEmbed(container) {
-  const url = container.dataset.url;
-  const platform = container.dataset.platform;
-  container.innerHTML = '';
-  if (platform === 'x') mountTwitterEmbed(container, url);
-  else if (platform === 'bluesky') mountBlueskyEmbed(container, url).then(() => {
-    const card = container.closest('.post-card');
-    const slot = card ? card.querySelector('.thread-slot') : null;
-    if (slot) setupBlueskyThread(slot, url);
-  });
+/* ---- X: 自前カード描画（本文 + メディア。tweets.jsアーカイブ由来） ---- */
+function xFallback(url) {
+  return `<div class="embed-placeholder">本文を読み込めませんでした（<a href="${escapeAttr(url)}" target="_blank" style="color:var(--accent)">投稿を開く ↗</a>）</div>`;
 }
 
-/* ---- X (Twitter) ---- */
-let twitterScriptLoaded = false;
-function ensureTwitterWidget() {
-  if (twitterScriptLoaded) return;
-  twitterScriptLoaded = true;
-  const s = document.createElement('script');
-  s.async = true;
-  s.src = 'https://platform.twitter.com/widgets.js';
-  document.body.appendChild(s);
-}
-
-function runTwitterWidgets(container) {
-  if (window.twttr && window.twttr.ready) {
-    window.twttr.ready(t => t.widgets.load(container));
-  } else {
-    setTimeout(() => runTwitterWidgets(container), 300);
+function renderMediaItem(item) {
+  if (item.type === 'photo') {
+    return `<img src="${escapeAttr(item.url)}" loading="lazy" alt="">`;
   }
+  const loopAttrs = item.type === 'animated_gif' ? ' loop muted autoplay playsinline' : ' controls';
+  return `<video src="${escapeAttr(item.url)}" poster="${escapeAttr(item.poster || '')}"${loopAttrs}></video>`;
 }
 
-function twitterFallback(url) {
-  return `<div class="embed-placeholder">投稿を読み込めませんでした（<a href="${escapeAttr(url)}" target="_blank" style="color:var(--accent)">投稿を開く ↗</a>）</div>`;
-}
-
-// createTweet()（ウィジェットAPI）はツイートが見つからない場合でもiframe内に
-// Xの「Not found」画面を表示するだけで、外側のJSからは失敗を検知できない
-// （iframeはクロスオリジンで中身を読めない）。そのため、まず oEmbed REST API
-// （publish.twitter.com/oembed）にfetchし、HTTPステータスで存在確認をしてから
-// widgets.jsで実際の埋め込みに変換する（Blueskyの oEmbed 判定と同じ方式）。
-async function fetchTwitterOEmbed(url) {
-  const cacheKey = 'x-oembed:' + url;
-  const cached = localStorage.getItem(cacheKey);
-  if (cached) {
-    if (cached === '__FAILED__') throw new Error('cached failure');
-    return cached;
-  }
-  // hide_thread=true でリプライ先ツイートの自動表示を抑止する（二重表示防止）
-  const res = await fetch('https://publish.twitter.com/oembed?url=' + encodeURIComponent(url) + '&hide_thread=true&dnt=true');
-  if (!res.ok) {
-    localStorage.setItem(cacheKey, '__FAILED__');
-    throw new Error('oEmbed fetch failed: ' + res.status);
-  }
-  const data = await res.json();
-  localStorage.setItem(cacheKey, data.html);
-  return data.html;
-}
-
-async function mountTwitterEmbed(container, url) {
-  ensureTwitterWidget();
-  container.innerHTML = '<div class="embed-placeholder">読み込み中…</div>';
-  try {
-    const html = await fetchTwitterOEmbed(url);
-    container.innerHTML = html;
-    runTwitterWidgets(container);
-  } catch (e) {
-    container.innerHTML = twitterFallback(url);
-  }
+function renderTweetCard(node) {
+  const textHtml = node.text ? `<div class="tweet-text">${escapeHtml(node.text)}</div>` : '';
+  const mediaHtml = (node.media && node.media.length)
+    ? `<div class="tweet-media">${node.media.map(renderMediaItem).join('')}</div>`
+    : '';
+  return `<div class="tweet-card">${textHtml}${mediaHtml}</div>`;
 }
 
 /* ---- X スレッド（post.json の replies を使用。分岐がある場合は入れ子で表示） ---- */
@@ -356,34 +315,46 @@ function onThreadToggle(btn) {
   if (!body.dataset.mounted) {
     body.dataset.mounted = '1';
     const tree = JSON.parse(btn.dataset.tree || '[]');
-    mountThreadTree(body, tree);
+    body.innerHTML = renderThreadTreeHtml(tree);
   }
   body.classList.add('open');
   btn.textContent = '▼ ツリーを閉じる';
 }
 
-function mountThreadTree(container, nodes) {
-  nodes.forEach(node => mountThreadNode(container, node));
+function renderThreadTreeHtml(nodes) {
+  return nodes.map(node => renderThreadNodeHtml(node)).join('');
 }
 
 // 分岐していない限り同じ階層（同じ縦線）のまま続ける。分岐している場合だけ
 // 新しく入れ子（.thread-children）を作って枝分かれを表現する。
-function mountThreadNode(container, node) {
-  const mount = document.createElement('div');
-  mount.className = 'embed-mount';
-  mount.innerHTML = '<div class="embed-placeholder">読み込み中…</div>';
-  container.appendChild(mount);
-  mountTwitterEmbed(mount, node.url);
-
+function renderThreadNodeHtml(node) {
+  let html = renderTweetCard(node);
   const children = node.replies || [];
   if (children.length === 1) {
-    mountThreadNode(container, children[0]);
+    html += renderThreadNodeHtml(children[0]);
   } else if (children.length > 1) {
-    const childWrap = document.createElement('div');
-    childWrap.className = 'thread-children';
-    children.forEach(child => mountThreadNode(childWrap, child));
-    container.appendChild(childWrap);
+    html += `<div class="thread-children">${children.map(renderThreadNodeHtml).join('')}</div>`;
   }
+  return html;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+/* ============================================================
+ * 埋め込み（共通マウント処理）
+ * ============================================================ */
+function mountEmbed(container) {
+  // ここに到達するのはBlueskyの main embed-mount のみ（Xは静的に描画済み）。
+  const url = container.dataset.url;
+  container.innerHTML = '';
+  mountBlueskyEmbed(container, url).then(() => {
+    const card = container.closest('.post-card');
+    const slot = card ? card.querySelector('.thread-slot') : null;
+    if (slot) setupBlueskyThread(slot, url);
+  });
 }
 
 /* ---- Bluesky ---- */
