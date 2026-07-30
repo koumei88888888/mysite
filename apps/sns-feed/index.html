@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- video.twimg.com はRefererヘッダーが自サイトのものだと403を返すため、
+     ページ全体でRefererを送らないようにする（要素のreferrerpolicy属性は
+     videoの内部range-requestには効かないことがあるため、ページ単位で指定） -->
+<meta name="referrer" content="no-referrer">
 <title>SNS Feed — ジャンル別投稿まとめ</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
@@ -278,8 +282,10 @@ function renderMediaItem(item) {
     // （実際の再生はカード下部の「元投稿を開く」から行う）。
     return `<img src="${escapeAttr(item.poster || '')}" loading="lazy" alt="動画のサムネイル（元投稿を開くと再生できます）">`;
   }
+  // video.twimg.com はRefererヘッダーが自サイトのものだと403を返すため、
+  // referrerpolicy="no-referrer" でRefererを送らないようにする（Originのみなら許可される）。
   const loopAttrs = item.type === 'animated_gif' ? ' loop muted autoplay playsinline' : ' controls';
-  return `<video src="${escapeAttr(item.url)}" poster="${escapeAttr(item.poster || '')}"${loopAttrs}></video>`;
+  return `<video src="${escapeAttr(item.url)}" poster="${escapeAttr(item.poster || '')}" referrerpolicy="no-referrer"${loopAttrs}></video>`;
 }
 
 function renderTweetCard(node) {
