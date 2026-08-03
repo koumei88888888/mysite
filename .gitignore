@@ -1,3 +1,8 @@
 # 個人のTwitterアーカイブ全体（非公開の作業用データ）。
 # post.json 生成スクリプトのローカル入力としてのみ使用し、コミット・公開はしない。
 apps/sns-feed/tweets*.js
+
+# post.json をGUIで編集するローカル専用ツール（認証なし。公開しない）。
+# post-lib.mjs は add-post.mjs が依存する共有ロジックなのでコミットする。
+apps/sns-feed/scripts/edit-server.mjs
+apps/sns-feed/scripts/editor.html
