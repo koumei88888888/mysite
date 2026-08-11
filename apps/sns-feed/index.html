@@ -104,7 +104,7 @@
  * ============================================================ */
 let ALL_POSTS = [];
 let currentMajor = 'すべて';
-let activeMinors = new Set();
+let activeMinor = null; // 小ジャンルは常に一つだけ選択可能
 let sortOrder = 'desc'; // 'desc' = 新しい順, 'asc' = 古い順
 
 function detectPlatform(url) {
@@ -163,7 +163,6 @@ function buildMajorTabs() {
       render();
     });
   });
-  if (activeMinors.size === 0) resetMinors();
 }
 
 function minorsForCurrentMajor() {
@@ -172,9 +171,8 @@ function minorsForCurrentMajor() {
 }
 
 function resetMinors() {
-  // 「すべて」タブは小ジャンルチップ自体を出さないため常に全件表示。
   // 特定の大ジャンルを選んだ直後は、小ジャンルは何も選択されていない状態にする。
-  activeMinors = currentMajor === 'すべて' ? new Set(minorsForCurrentMajor()) : new Set();
+  activeMinor = null;
 }
 
 function buildMinorChips() {
@@ -185,13 +183,12 @@ function buildMinorChips() {
   }
   const minors = minorsForCurrentMajor();
   chipsEl.innerHTML = minors.map(m =>
-    `<button class="chip${activeMinors.has(m) ? ' active' : ''}" data-minor="${escapeAttr(m)}">${escapeHtml(m)}</button>`
+    `<button class="chip${m === activeMinor ? ' active' : ''}" data-minor="${escapeAttr(m)}">${escapeHtml(m)}</button>`
   ).join('');
   chipsEl.querySelectorAll('.chip').forEach(btn => {
     btn.addEventListener('click', () => {
       const m = btn.dataset.minor;
-      if (activeMinors.has(m)) activeMinors.delete(m); else activeMinors.add(m);
-      btn.classList.toggle('active');
+      activeMinor = (activeMinor === m) ? null : m; // 同じチップをもう一度押すと選択解除
       render();
     });
   });
@@ -211,7 +208,7 @@ function updateSortButton() {
  * ============================================================ */
 function getFilteredSortedPosts() {
   const filtered = ALL_POSTS.filter(p =>
-    currentMajor === 'すべて' ? true : (p.major === currentMajor && activeMinors.has(p.minor))
+    currentMajor === 'すべて' ? true : (p.major === currentMajor && p.minor === activeMinor)
   );
   filtered.sort((a, b) => {
     if (!a.date && !b.date) return 0;
