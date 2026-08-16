@@ -10,3 +10,5 @@ apps/sns-feed/scripts/editor.html
 
 # tweets.js を手動キャプチャしたTweetDetail応答から更新するローカル専用ツール。
 apps/sns-feed/scripts/import-tweetdetail.mjs
+
+memo.md
