@@ -237,3 +237,20 @@ export async function writePosts(posts) {
 export function countThreadNodes(nodes) {
   return (nodes || []).reduce((sum, n) => sum + 1 + countThreadNodes(n.replies), 0);
 }
+
+// freshNodes（最新の取得結果）の中に、storedNodes（保存済み）にはまだ無いノードが
+// いくつあるかを再帰的に数える（URLで同一ノードを対応付け、無いものだけを新規として加算）。
+// 新規ノードはその配下も丸ごと新規扱いになる。
+export function countNewThreadNodes(freshNodes, storedNodes) {
+  const storedByUrl = new Map((storedNodes || []).map(n => [n.url, n]));
+  let count = 0;
+  for (const node of (freshNodes || [])) {
+    const matched = storedByUrl.get(node.url);
+    if (!matched) {
+      count += 1 + countThreadNodes(node.replies);
+    } else {
+      count += countNewThreadNodes(node.replies, matched.replies);
+    }
+  }
+  return count;
+}
