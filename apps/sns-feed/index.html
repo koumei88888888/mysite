@@ -116,7 +116,7 @@ function detectPlatform(url) {
 async function loadPosts() {
   const listEl = document.getElementById('post-list');
   try {
-    const posts = await fetch('./post.json').then(r => {
+    const posts = await fetch('./post.json', { cache: 'no-store' }).then(r => {
       if (!r.ok) throw new Error(r.status);
       return r.json();
     });
