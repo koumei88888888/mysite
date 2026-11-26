@@ -352,12 +352,20 @@ async function fetchAllVideos(channelId, uploadsId) {
         const pl = playlists[pi];
         sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>楽曲を取得中... (${pi+1}/${playlists.length}): ${pl.snippet.title}</div>`;
         let plItems = [], itemPageToken = '';
-        do {
-          const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${pl.id}&maxResults=50${itemPageToken ? '&pageToken='+itemPageToken : ''}`;
-          const d = await ytGet(url);
-          plItems = plItems.concat(d.items || []);
-          itemPageToken = d.nextPageToken || '';
-        } while (itemPageToken);
+        try {
+          do {
+            const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${pl.id}&maxResults=50${itemPageToken ? '&pageToken='+itemPageToken : ''}`;
+            const d = await ytGet(url);
+            plItems = plItems.concat(d.items || []);
+            itemPageToken = d.nextPageToken || '';
+          } while (itemPageToken);
+        } catch (e) {
+          // 削除済み・非公開などで取得できないプレイリストはスキップ
+          if (!accessToken) throw e; // セッション切れは中断
+          console.warn('プレイリスト取得をスキップ:', pl.id, pl.snippet?.title, e.message);
+          continue;
+        }
+        if (plItems.length === 0) continue;
         plItems.sort((a, b) => (a.snippet.position||0) - (b.snippet.position||0));
         plItems.forEach(item => { const v = item.snippet.resourceId?.videoId; if (v) allVideoIdSet.add(v); });
         rawPlaylistData.push({ pl, plItems });
@@ -436,7 +444,13 @@ async function fetchAllVideos(channelId, uploadsId) {
       let pageToken = '';
       do {
         const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsId}&maxResults=50${pageToken ? '&pageToken='+pageToken : ''}`;
-        const d = await ytGet(url);
+        let d;
+        try {
+          d = await ytGet(url);
+        } catch (e) {
+          if (/cannot be found/i.test(e.message)) throw new Error('このチャンネルの楽曲プレイリストが取得できませんでした（アップロード一覧が非公開または存在しません）');
+          throw e;
+        }
         items = items.concat(d.items || []);
         pageToken = d.nextPageToken || '';
         sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>${items.length} 件取得中...</div>`;
