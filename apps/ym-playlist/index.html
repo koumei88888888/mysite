@@ -158,7 +158,9 @@
 <script>
 const REDIRECT_URI = 'https://koumei88888888.github.io/mysite/apps/ym-playlist/';
 const CLIENT_ID = '387151179353-nad0hcdgel2ebljaoajfbp7idjuiluv4.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl';
+// YouTube Music 中継 Worker の URL（apps/ym-playlist/worker/README.md 参照）。末尾スラッシュなし
+const YTM_PROXY_URL = 'https://ym-playlist-proxy.koumei88888888.workers.dev';
+const SCOPES ='https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl';
 
 let accessToken = null;
 let selectedChannel = null;
@@ -330,15 +332,31 @@ async function fetchAllVideos(channelId, uploadsId) {
   const sec = document.getElementById('tracks-section');
   sec.innerHTML = '<div class="status-bar"><div class="spinner"></div>動画一覧を取得中...</div>';
   try {
-    // Step1: アルバム/シングルのプレイリスト一覧を取得
-    let playlists = [], plPageToken = '';
-    do {
-      const url = `https://www.googleapis.com/youtube/v3/playlists?part=snippet&channelId=${channelId}&maxResults=50${plPageToken ? '&pageToken='+plPageToken : ''}`;
-      const d = await ytGet(url);
-      playlists = playlists.concat(d.items || []);
-      plPageToken = d.nextPageToken || '';
-      sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>アルバム/シングル一覧を取得中... ${playlists.length}件</div>`;
-    } while (plPageToken);
+    // Step1: アルバム/シングルの一覧を取得
+    // 優先: YouTube Music のディスコグラフィー（中継Worker経由）— 全リリースの OLAK5uy_ プレイリストが得られる
+    // 予備: Data API のチャンネルプレイリスト一覧（Topicチャンネルでは空や不完全なことがある）
+    let playlists = [], fromDiscography = false;
+    if (YTM_PROXY_URL) {
+      sec.innerHTML = '<div class="status-bar"><div class="spinner"></div>YouTube Music からアルバム/シングル一覧を取得中...</div>';
+      const r = await fetch(`${YTM_PROXY_URL}/discography?channelId=${encodeURIComponent(channelId)}`);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error('YouTube Music からアルバム/シングル一覧を取得できませんでした: ' + (d.error || r.status));
+      playlists = (d.releases || []).map(rel => ({
+        id: rel.playlistId, browseId: rel.browseId,
+        snippet: { title: rel.title, publishedAt: '' },
+      }));
+      fromDiscography = playlists.length > 0;
+    }
+    if (!fromDiscography) {
+      let plPageToken = '';
+      do {
+        const url = `https://www.googleapis.com/youtube/v3/playlists?part=snippet&channelId=${channelId}&maxResults=50${plPageToken ? '&pageToken='+plPageToken : ''}`;
+        const d = await ytGet(url);
+        playlists = playlists.concat(d.items || []);
+        plPageToken = d.nextPageToken || '';
+        sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>アルバム/シングル一覧を取得中... ${playlists.length}件</div>`;
+      } while (plPageToken);
+    }
 
     let items = [];
     const videoDetailMap = new Map();
@@ -348,11 +366,13 @@ async function fetchAllVideos(channelId, uploadsId) {
       // Step2: 各プレイリストのアイテムを取得（videoId + position）
       const rawPlaylistData = []; // { pl, plItems }
       const allVideoIdSet = new Set();
+      const failedReleases = [];
       for (let pi = 0; pi < playlists.length; pi++) {
         const pl = playlists[pi];
         sec.innerHTML = `<div class="status-bar"><div class="spinner"></div>楽曲を取得中... (${pi+1}/${playlists.length}): ${pl.snippet.title}</div>`;
         let plItems = [], itemPageToken = '';
         try {
+          if (!pl.id) throw new Error('playlistId なし');
           do {
             const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${pl.id}&maxResults=50${itemPageToken ? '&pageToken='+itemPageToken : ''}`;
             const d = await ytGet(url);
@@ -360,15 +380,35 @@ async function fetchAllVideos(channelId, uploadsId) {
             itemPageToken = d.nextPageToken || '';
           } while (itemPageToken);
         } catch (e) {
-          // 削除済み・非公開などで取得できないプレイリストはスキップ
           if (!accessToken) throw e; // セッション切れは中断
-          console.warn('プレイリスト取得をスキップ:', pl.id, pl.snippet?.title, e.message);
-          continue;
+          plItems = [];
+          if (!fromDiscography) {
+            // チャンネルのプレイリスト一覧由来（削除済み・非公開など）はスキップ
+            console.warn('プレイリスト取得をスキップ:', pl.id, pl.snippet?.title, e.message);
+            continue;
+          }
+        }
+        // ディスコグラフィー由来で取れなかった場合は YouTube Music のアルバムページから収録曲を取得
+        if (fromDiscography && plItems.length === 0) {
+          try {
+            const r = await fetch(`${YTM_PROXY_URL}/album?browseId=${encodeURIComponent(pl.browseId)}`);
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.error || r.status);
+            plItems = (d.tracks || []).map((t, i) => ({
+              snippet: { title: t.title, position: i, publishedAt: '', resourceId: { kind: 'youtube#video', videoId: t.videoId } },
+            }));
+          } catch (e) {
+            console.warn('アルバム取得失敗:', pl.browseId, pl.snippet.title, e.message);
+          }
+          if (plItems.length === 0) { failedReleases.push(pl.snippet.title); continue; }
         }
         if (plItems.length === 0) continue;
         plItems.sort((a, b) => (a.snippet.position||0) - (b.snippet.position||0));
         plItems.forEach(item => { const v = item.snippet.resourceId?.videoId; if (v) allVideoIdSet.add(v); });
         rawPlaylistData.push({ pl, plItems });
+      }
+      if (failedReleases.length) {
+        throw new Error(`次のリリースの収録曲を取得できなかったため中断しました（曲の欠落を防ぐため）: ${failedReleases.join(' / ')}`);
       }
 
       // Step3: 全動画の詳細を取得（実際の公開日 snippet.publishedAt を得るため）
@@ -448,7 +488,12 @@ async function fetchAllVideos(channelId, uploadsId) {
         try {
           d = await ytGet(url);
         } catch (e) {
-          if (/cannot be found/i.test(e.message)) throw new Error('このチャンネルの楽曲プレイリストが取得できませんでした（アップロード一覧が非公開または存在しません）');
+          // Topicチャンネルはアップロード一覧(UU...)がAPIから見えないことがある
+          if (/cannot be found/i.test(e.message)) {
+            throw new Error(YTM_PROXY_URL
+              ? 'このアーティストのアルバム/シングルが YouTube Music・YouTube のどちらからも取得できませんでした'
+              : 'このチャンネルはアップロード一覧が取得できません。YouTube Music 中継 Worker（YTM_PROXY_URL）を設定してください');
+          }
           throw e;
         }
         items = items.concat(d.items || []);
