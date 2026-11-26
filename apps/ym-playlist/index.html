@@ -316,15 +316,34 @@ function isInst(title) {
 }
 function normalizeTitle(title) {
   return title
-    .normalize('NFC')                    // Unicode正規化（濁点の合成/分解を統一）
+    .normalize('NFKC')                   // Unicode正規化（濁点の合成/分解・全角/半角記号を統一）
     .toLowerCase()
     .replace(/[\s\u3000]+/g, ' ')       // 全角スペース統一
     .replace(/,\s*/g, ',')               // カンマ後スペース除去
     .replace(/\(.*?\)|\[.*?\]|【.*?】|「.*?」/g, '')  // 括弧除去
     .replace(/[-_]\s*(ver\.|version|remix|edit|remaster.*|MV|PV|Music Video|Official)/gi, '')
     .replace(/\s*(MV|PV|Music Video|Official Video|Official|OFFICIAL)\s*/gi, '')
-    .replace(/\s+/g, ' ')               // 複数スペースを1つに
+    .replace(/\s+/g, '')                // スペースの有無の違いを無視
     .trim();
+}
+
+// ISO日時 → 日本時間の日付 (YYYY-MM-DD)
+function toJstDate(iso) {
+  const t = Date.parse(iso || '');
+  return isNaN(t) ? '' : new Date(t + 9 * 3600 * 1000).toISOString().slice(0, 10);
+}
+// Art Track（自動生成）の説明文にある正確な発売日「Released on: YYYY-MM-DD」
+function releasedOnDate(item, videoDetailMap) {
+  const detail = videoDetailMap.get(item.snippet.resourceId?.videoId);
+  return ((detail?.snippet?.description || '').match(/Released on:\s*(\d{4}-\d{2}-\d{2})/) || [])[1] || '';
+}
+// 動画の公開日（JST）。発売日と大きくずれている（数年後など）ことがあるので補助的に使う
+function videoPublishDate(item, videoDetailMap) {
+  const detail = videoDetailMap.get(item.snippet.resourceId?.videoId);
+  return toJstDate(detail?.snippet?.publishedAt || item.snippet.publishedAt);
+}
+function trackReleaseDate(item, videoDetailMap) {
+  return releasedOnDate(item, videoDetailMap) || videoPublishDate(item, videoDetailMap);
 }
 
 /* ---- FETCH ALL VIDEOS ---- */
@@ -342,7 +361,7 @@ async function fetchAllVideos(channelId, uploadsId) {
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error('YouTube Music からアルバム/シングル一覧を取得できませんでした: ' + (d.error || r.status));
       playlists = (d.releases || []).map(rel => ({
-        id: rel.playlistId, browseId: rel.browseId,
+        id: rel.playlistId, browseId: rel.browseId, year: rel.year || '',
         snippet: { title: rel.title, publishedAt: '' },
       }));
       fromDiscography = playlists.length > 0;
@@ -436,42 +455,59 @@ async function fetchAllVideos(channelId, uploadsId) {
       }
 
       // Step4: 各プレイリストのリリース日を計算
-      // リリース日 = 収録動画の公開日の最大値（最新トラックがそのリリースの発売日に近い）
+      // リリース日 = 収録曲の「Released on」の最大値（シングルからの再収録曲は古い日付なので、最大値がそのリリースの発売日）
+      // 「Released on」が1曲も無い場合のみ動画の公開日を使う。YouTube Music の発売年より後になったら年末に丸める
+      const maxOf = arr => arr.filter(Boolean).sort().pop() || '';
+      const minOf = arr => arr.filter(Boolean).sort()[0] || '';
       const playlistData = rawPlaylistData.map(({ pl, plItems }) => {
-        let maxDate = '', minDate = '';
-        for (const item of plItems) {
-          const vid = item.snippet.resourceId?.videoId;
-          const d = videoDetailMap.get(vid)?.snippet?.publishedAt || item.snippet.publishedAt || '';
-          if (d && (d > maxDate || !maxDate)) maxDate = d;
-          if (d && (d < minDate || !minDate)) minDate = d;
-        }
-        const releaseDate = maxDate || pl.snippet.publishedAt || '';
-        return { pl, plItems, releaseDate, minDate: minDate || releaseDate };
+        const relDates = plItems.map(it => releasedOnDate(it, videoDetailMap));
+        const pubDates = plItems.map(it => videoPublishDate(it, videoDetailMap));
+        let releaseDate = maxOf(relDates) || maxOf(pubDates) || toJstDate(pl.snippet.publishedAt);
+        if (pl.year && (!releaseDate || releaseDate.slice(0, 4) > pl.year)) releaseDate = pl.year + '-12-31';
+        const minDate = minOf(relDates) || minOf(pubDates) || releaseDate;
+        return { pl, plItems, releaseDate, minDate };
       });
 
       // Step5: リリース日（古い順）でプレイリストをソート
-      // 同日の場合: (1) minDateが古い方（古い曲を含む=アルバム）→ (2) トラック数多い順 → (3) プレイリスト作成日時順
+      // 同日の場合: (1) トラック数が少ない順（シングル → EP → アルバム）→ (2) minDateが古い方 → (3) プレイリスト作成日時順
       playlistData.sort((a, b) => {
         const cmp = a.releaseDate.localeCompare(b.releaseDate);
         if (cmp !== 0) return cmp;
+        const lenCmp = a.plItems.length - b.plItems.length;
+        if (lenCmp !== 0) return lenCmp;
         const minCmp = a.minDate.localeCompare(b.minDate);
         if (minCmp !== 0) return minCmp;
-        const lenCmp = b.plItems.length - a.plItems.length;
-        if (lenCmp !== 0) return lenCmp;
         return (a.pl.snippet.publishedAt || '').localeCompare(b.pl.snippet.publishedAt || '');
       });
 
-      // Step6: ソート済みプレイリスト順に楽曲を収集（重複動画IDはスキップ）
+      // Step6: ソート済みプレイリスト順（＝リリース順 → トラック順）に楽曲を収集
+      // 同じ動画が複数リリースにある場合は最初（最も古いリリース）のものを採用
+      // 並びキー = 曲の発売日 → リリース順 → トラック順
+      //   先行配信曲はアルバムより前の日付になるので、アルバムの位置ではなく先行配信日の位置に並ぶ
+      const DAY = 24 * 3600 * 1000;
       const seenVideoIds = new Set();
-      for (const { plItems } of playlistData) {
-        for (const item of plItems) {
+      playlistData.forEach(({ pl, plItems, releaseDate }, relIdx) => {
+        plItems.forEach((item, pos) => {
           const vid = item.snippet.resourceId?.videoId;
           if (vid && !seenVideoIds.has(vid)) {
             seenVideoIds.add(vid);
+            let d = releasedOnDate(item, videoDetailMap);
+            if (!d) {
+              // 「Released on」が無い曲: 公開日がリリース日より前なら先行配信とみなして採用、
+              // 後ならずれた公開日（数年後の再公開など）なのでリリース日を使う
+              const p = videoPublishDate(item, videoDetailMap);
+              d = (p && p < releaseDate) ? p : releaseDate;
+              // 公開日は発売日より1日ほど早いことがあるため、3日以内の差はリリース日に揃える
+              const diff = Date.parse(releaseDate) - Date.parse(d);
+              if (diff > 0 && diff <= 3 * DAY) d = releaseDate;
+            }
+            item._date = d;
+            item._order = d + '-' + String(relIdx).padStart(5, '0') + '-' + String(pos).padStart(4, '0');
+            item._release = { title: pl.snippet.title, date: releaseDate };
             items.push(item);
           }
-        }
-      }
+        });
+      });
     }
 
     // プレイリストが見つからない場合はアップロードプレイリストにフォールバック
@@ -548,35 +584,31 @@ async function fetchAllVideos(channelId, uploadsId) {
     _vocal = vocal;
 
     // Step8: タイトル正規化による重複除去
-    // 優先順位: 1) 視聴可能 > 視聴不可、2) 動画の実際の公開日が古い方を保持（新しいリリースを除外）
+    // シングル → アルバム再収録のように同じ曲が複数リリースにある場合、最初にリリースされた方を採用する。
+    // 並びキー: プレイリスト由来なら発売日+リリース順+トラック順、アップロード一覧由来なら発売日+アルバム内位置
+    const orderOf = v => v._order || (v._date + '-' +
+      String(videoAlbumPosMap.get(v.snippet.resourceId?.videoId)?.pos ?? 9999).padStart(4, '0'));
     const dedupMap = new Map(); let dupCount = 0;
+    items.forEach(v => { v._date ||= trackReleaseDate(v, videoDetailMap); });
     vocal.forEach(v => {
       const key = normalizeTitle(v.snippet.title);
-      const vid = v.snippet.resourceId?.videoId;
-      const avail = isAvailableInJP(videoDetailMap.get(vid));
-      // videos API の実際の公開日を使って古い方を確実に保持
-      const date = videoDetailMap.get(vid)?.snippet?.publishedAt || v.snippet.publishedAt || '';
-      if (!dedupMap.has(key)) {
-        dedupMap.set(key, { item: v, avail, date });
-      } else {
-        const cur = dedupMap.get(key);
-        dupCount++;
-        const replace =
-          (!cur.avail && avail) ||                  // 不可→可: 視聴可能版を優先
-          (cur.avail === avail && date < cur.date); // 同じ可否: 古い公開日の方を保持
-        if (replace) dedupMap.set(key, { item: v, avail, date });
+      const avail = isAvailableInJP(videoDetailMap.get(v.snippet.resourceId?.videoId));
+      const order = orderOf(v);
+      const cur = dedupMap.get(key);
+      if (!cur) { dedupMap.set(key, { item: v, avail, order }); return; }
+      dupCount++;
+      if (order < cur.order) {
+        // より早いリリース: 位置はこちら。音源も、視聴不可でなければこちらを採用
+        if (avail || !cur.avail) cur.item = v, cur.avail = avail;
+        cur.order = order;
+      } else if (!cur.avail && avail) {
+        // 最初のリリース版が日本で視聴不可 → 視聴可能な後のリリース版を、最初のリリースの位置に置く
+        cur.item = v; cur.avail = avail;
       }
     });
 
-    filteredVideos = Array.from(dedupMap.values()).map(e => e.item);
-    filteredVideos.sort((a, b) => {
-      const da = (a.snippet.publishedAt || '').slice(0, 10);
-      const db = (b.snippet.publishedAt || '').slice(0, 10);
-      if (da !== db) return da.localeCompare(db);
-      const vidA = a.snippet.resourceId?.videoId;
-      const vidB = b.snippet.resourceId?.videoId;
-      return (videoAlbumPosMap.get(vidA)?.pos ?? 9999) - (videoAlbumPosMap.get(vidB)?.pos ?? 9999);
-    });
+    const kept = Array.from(dedupMap.values()).sort((a, b) => a.order.localeCompare(b.order));
+    filteredVideos = kept.map(e => e.item);
 
     // 除外曲リストを保存
     _skippedVideos = items.filter(v => {
@@ -697,13 +729,13 @@ async function createPlaylist() {
 function renderTrackItem(v, num) {
   const s = v.snippet;
   const thumb = s.thumbnails?.medium?.url || s.thumbnails?.default?.url;
-  const date = (s.publishedAt||'').slice(0,10);
+  const date = v._date || (s.publishedAt||'').slice(0,10);
   return `<div class="track-item">
     <span class="t-num">${num}</span>
     ${thumb ? `<img class="t-thumb" src="${thumb}" />` : '<div class="t-thumb-ph"></div>'}
     <div class="t-info">
       <div class="t-name">${s.title}</div>
-      <div class="t-ch">${s.videoOwnerChannelTitle || s.channelTitle || ''}</div>
+      <div class="t-ch">${v._release ? '収録: ' + v._release.title : (s.videoOwnerChannelTitle || s.channelTitle || '')}</div>
     </div>
     <span class="t-date">${date}</span>
   </div>`;
